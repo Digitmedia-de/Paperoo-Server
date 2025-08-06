@@ -182,6 +182,9 @@
                                     <button type="button" class="btn btn-sm btn-warning" id="retryFailedBtn" style="display: none;">
                                         🔄 Retry
                                     </button>
+                                    <button type="button" class="btn btn-sm btn-danger" id="clearQueueBtn" style="display: none;">
+                                        🗑️ Clear
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -409,6 +412,13 @@
                             } else {
                                 $('#retryFailedBtn').hide();
                             }
+                            
+                            // Show/hide clear button if there are pending or failed todos
+                            if (data.pending > 0 || data.failed > 0) {
+                                $('#clearQueueBtn').show();
+                            } else {
+                                $('#clearQueueBtn').hide();
+                            }
                         }
                     },
                     error: function() {
@@ -437,6 +447,25 @@
                         showAlert('Failed to retry prints', 'danger');
                     }
                 });
+            });
+            
+            // Clear queue button
+            $('#clearQueueBtn').on('click', function() {
+                if (confirm('{{ t.confirm_clear_queue | default("Are you sure you want to clear all pending and failed tasks from the queue?") }}')) {
+                    $.ajax({
+                        url: '/api/queue/clear',
+                        method: 'POST',
+                        success: function(response) {
+                            if (response.success) {
+                                showAlert(response.message, 'success');
+                                loadQueueStatus();
+                            }
+                        },
+                        error: function() {
+                            showAlert('{{ t.failed_clear_queue | default("Failed to clear queue") }}', 'danger');
+                        }
+                    });
+                }
             });
             
             // Load queue status on page load

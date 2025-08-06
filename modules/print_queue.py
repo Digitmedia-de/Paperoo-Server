@@ -119,6 +119,10 @@ class PrintQueueManager:
         """Manually trigger retry of all failed todos"""
         return self.db.reset_failed_todos()
     
+    def clear_queue(self) -> int:
+        """Clear all pending and failed todos from the queue"""
+        return self.db.clear_queue()
+    
     def get_queue_status(self) -> dict:
         """Get current queue status"""
         stats = self.db.get_stats()

@@ -684,6 +684,24 @@ def api_retry_failed():
             'error': str(e)
         }), 500
 
+@app.route('/api/queue/clear', methods=['POST'])
+@session_manager.require_auth
+def api_clear_queue():
+    """Clear all pending and failed todos from the queue"""
+    try:
+        count = queue_manager.clear_queue()
+        return jsonify({
+            'success': True,
+            'message': f'Cleared {count} todos from queue',
+            'count': count
+        })
+    except Exception as e:
+        logger.error(f"Error clearing queue: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 # Cleanup on exit
 def cleanup():
     """Clean up resources on application exit"""

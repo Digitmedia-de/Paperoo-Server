@@ -192,6 +192,36 @@ class TodoDatabase:
                 logger.error(f"Error getting todo by ID: {str(e)}")
                 return None
     
+    def clear_queue(self) -> int:
+        """Clear all pending and failed todos from the queue"""
+        with self.lock:
+            try:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                
+                # Count todos to be deleted
+                cursor.execute('''
+                    SELECT COUNT(*) FROM todos 
+                    WHERE status IN ('pending', 'failed')
+                ''')
+                count = cursor.fetchone()[0]
+                
+                # Delete pending and failed todos
+                cursor.execute('''
+                    DELETE FROM todos 
+                    WHERE status IN ('pending', 'failed')
+                ''')
+                
+                conn.commit()
+                conn.close()
+                
+                logger.info(f"Cleared {count} todos from queue")
+                return count
+                
+            except Exception as e:
+                logger.error(f"Error clearing queue: {str(e)}")
+                return 0
+    
     def get_recent_todos(self, limit: int = 50) -> List[Dict]:
         """Get recent todos for display"""
         with self.lock:

@@ -137,8 +137,19 @@ class PrinterManager:
                     
                     # Wait configured seconds for printer to become ready
                     wait_seconds = int(self.config.get('MQTT_WAIT_SECONDS', 5))
-                    logger.info(f"Waiting {wait_seconds} seconds for printer to become ready")
+                    logger.info(f"Waiting {wait_seconds} seconds for printer to power on and become ready")
                     time.sleep(wait_seconds)
+                    
+                    # IMPORTANT: Reset printer connection after power on
+                    # The USB connection is lost when printer powers off/on
+                    logger.info("Resetting printer connection after power cycle")
+                    if self.printer:
+                        try:
+                            logger.info("Closing existing printer connection")
+                            self.printer.close()
+                        except Exception as e:
+                            logger.debug(f"Error closing printer: {e}")
+                    self.printer = None  # Force reconnection
                     self.printer_active = True
                 else:
                     logger.debug("Printer already active - skipping before_print message")
@@ -151,7 +162,17 @@ class PrinterManager:
             try:
                 # Initialize printer if not already done or if it was reset
                 if not self.printer:
-                    if not self.initialize_printer():
+                    # Try multiple times if printer was just powered on
+                    max_attempts = 3 if self.printer_active else 1
+                    for attempt in range(max_attempts):
+                        if attempt > 0:
+                            logger.info(f"Printer connection attempt {attempt + 1}/{max_attempts}")
+                            time.sleep(2)  # Wait 2 seconds between attempts
+                        
+                        if self.initialize_printer():
+                            break
+                    else:
+                        # All attempts failed
                         # Still set up timeout even if print fails
                         self._setup_mqtt_timeout(mqtt_handler)
                         return False, "Printer initialization failed. Please check printer connection and configuration."
@@ -320,6 +341,15 @@ class PrinterManager:
                 success = mqtt_handler.send_after_timeout()
                 if success:
                     logger.info("MQTT after_timeout message sent successfully")
+                    # Reset printer connection as printer will power off
+                    logger.info("Resetting printer connection as printer will power off")
+                    if self.printer:
+                        try:
+                            logger.info("Closing printer connection before power off")
+                            self.printer.close()
+                        except Exception as e:
+                            logger.debug(f"Error closing printer: {e}")
+                    self.printer = None  # Force reconnection on next print
                 else:
                     logger.warning("Failed to send MQTT after_timeout message")
                 self.printer_active = False
