@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ t.app_title }}</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icons/favicon.ico') }}">
+    <link rel="icon" type="image/png" sizes="32x32" href="{{ url_for('static', filename='icons/favicon-32x32.png') }}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{{ url_for('static', filename='icons/favicon-16x16.png') }}">
+    
+    <!-- Apple Touch Icons -->
+    <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='icons/apple-touch-icon-180x180.png') }}">
+    
+    <!-- Android Chrome -->
+    <link rel="manifest" href="{{ url_for('static', filename='manifest.json') }}">
+    
+    <!-- Microsoft Tiles -->
+    <meta name="msapplication-config" content="{{ url_for('static', filename='browserconfig.xml') }}">
+    <meta name="theme-color" content="#5d87ff">
+    
+    <!-- Bootstrap CSS -->
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+    <!-- Local Fonts -->
+    <link href="{{ url_for('static', filename='css/fonts.css') }}" rel="stylesheet">
+    <!-- Modern Style CSS -->
+    <link href="{{ url_for('static', filename='css/modern-style.css') }}" rel="stylesheet">
+</head>
+<body>
+    <div class="app-wrapper">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <a href="/" class="brand">
+                    <img src="{{ url_for('static', filename='icons/logo-small.png') }}" alt="Paperoo" class="brand-logo">
+                    <div class="brand-text">{{ t.app_title }}</div>
+                </a>
+                <div class="header-actions">
+                    <div class="language-selector">
+                        <button class="lang-btn {{ 'active' if language == 'de' else '' }}" data-lang="de" title="Deutsch">
+                            🇩🇪
+                        </button>
+                        <button class="lang-btn {{ 'active' if language == 'en' else '' }}" data-lang="en" title="English">
+                            🇬🇧
+                        </button>
+                    </div>
+                    <div class="status-badge">
+                        <span class="status-dot" id="statusDot"></span>
+                        <span id="statusText">{{ t.online }}</span>
+                    </div>
+                    {% if session_info %}
+                    <a href="/logout" class="btn btn-sm btn-light" title="{{ t.logout | default('Logout') }}">
+                        🚪 {{ t.logout | default('Logout') }}
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </header>
+        
+        <!-- Main Content -->
+        <main class="app-content">
+            <div class="container-centered">
+                <!-- ToDo Form Card -->
+                <div class="main-card">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">{{ t.create_new_todo }}</h3>
+                            <p class="card-subtitle">{{ t.app_subtitle }}</p>
+                        </div>
+                        <div class="card-body">
+                            <form id="todoForm">
+                                <div class="form-group">
+                                    <label for="todoText" class="form-label">{{ t.task_description }}</label>
+                                    <textarea 
+                                        class="form-control" 
+                                        id="todoText" 
+                                        name="text"
+                                        rows="4" 
+                                        placeholder="{{ t.task_placeholder }}"
+                                        maxlength="500"
+                                        required
+                                    ></textarea>
+                                    <div class="char-counter">
+                                        <span id="charCount">0</span> / 500
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label class="form-label">{{ t.priority_level }}</label>
+                                    <div class="priority-group">
+                                        <div class="priority-item">
+                                            <label class="priority-label" data-priority="1">
+                                                <input type="radio" name="priority" value="1">
+                                                <div class="priority-stars">★</div>
+                                                <div class="priority-text">{{ t.priority_low }}</div>
+                                            </label>
+                                        </div>
+                                        
+                                        <div class="priority-item">
+                                            <label class="priority-label" data-priority="2">
+                                                <input type="radio" name="priority" value="2">
+                                                <div class="priority-stars">★★</div>
+                                                <div class="priority-text">{{ t.priority_medium }}</div>
+                                            </label>
+                                        </div>
+                                        
+                                        <div class="priority-item">
+                                            <label class="priority-label active" data-priority="3">
+                                                <input type="radio" name="priority" value="3" checked>
+                                                <div class="priority-stars">★★★</div>
+                                                <div class="priority-text">{{ t.priority_normal }}</div>
+                                            </label>
+                                        </div>
+                                        
+                                        <div class="priority-item">
+                                            <label class="priority-label" data-priority="4">
+                                                <input type="radio" name="priority" value="4">
+                                                <div class="priority-stars">★★★★</div>
+                                                <div class="priority-text">{{ t.priority_high }}</div>
+                                            </label>
+                                        </div>
+                                        
+                                        <div class="priority-item">
+                                            <label class="priority-label" data-priority="5">
+                                                <input type="radio" name="priority" value="5">
+                                                <div class="priority-stars">★★★★★</div>
+                                                <div class="priority-text">{{ t.priority_urgent }}</div>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <button type="submit" class="btn btn-primary btn-lg btn-block" id="printBtn">
+                                    <span id="btnText">{{ t.print_button }}</span>
+                                    <span id="btnSpinner" style="display: none;">
+                                        <span class="spinner-border spinner-border-sm" role="status"></span>
+                                        {{ t.printing }}
+                                    </span>
+                                </button>
+                            </form>
+                            
+                            <div id="alertContainer" class="mt-3"></div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Queue Status Card -->
+                <div class="main-card mt-4">
+                    <div class="card">
+                        <div class="card-body py-3">
+                            <div class="queue-status-inline">
+                                <div class="queue-title">
+                                    <span class="fw-bold">{{ t.queue_status | default('Queue Status') }}</span>
+                                </div>
+                                <div class="queue-stats">
+                                    <div class="stat-item">
+                                        <span class="stat-icon">📋</span>
+                                        <span class="stat-number" id="statTotal">0</span>
+                                        <span class="stat-label">Total</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span class="stat-icon">✅</span>
+                                        <span class="stat-number" id="statPrinted">0</span>
+                                        <span class="stat-label">Printed</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span class="stat-icon">⏳</span>
+                                        <span class="stat-number" id="statPending">0</span>
+                                        <span class="stat-label">Pending</span>
+                                    </div>
+                                    <div class="stat-item">
+                                        <span class="stat-icon">⚠️</span>
+                                        <span class="stat-number" id="statFailed">0</span>
+                                        <span class="stat-label">Failed</span>
+                                    </div>
+                                </div>
+                                <div class="queue-actions">
+                                    <button type="button" class="btn btn-sm btn-light" id="refreshQueueBtn" title="{{ t.refresh }}">
+                                        🔄
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-warning" id="retryFailedBtn" style="display: none;">
+                                        🔄 Retry
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Printer Selection Card -->
+                <div class="main-card mt-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <h3 class="card-title">{{ t.printer_config }}</h3>
+                                <button type="button" class="btn btn-sm btn-light" id="refreshPrintersBtn">
+                                    🔄 {{ t.refresh }}
+                                </button>
+                            </div>
+                        </div>
+                        <div class="card-body">
+                            <div id="printerSelection" class="printer-list">
+                                <div class="loading-container">
+                                    <div class="spinner-border" role="status"></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+    
+    <!-- Print Animation -->
+    <div class="print-animation" id="printAnimation">
+        <div class="text-center">
+            <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;"></div>
+            <h4>Printing ToDo...</h4>
+        </div>
+    </div>
+    
+    <!-- jQuery -->
+    <script src="{{ url_for('static', filename='js/jquery-3.7.1.min.js') }}"></script>
+    <!-- Bootstrap Bundle JS -->
+    <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+    
+    <script>
+        // Store translations in JavaScript
+        let translations = {{ t | tojson }};
+        let currentLanguage = '{{ language }}';
+        
+        $(document).ready(function() {
+            // Character counter
+            $('#todoText').on('input', function() {
+                const count = $(this).val().length;
+                $('#charCount').text(count);
+            });
+            
+            // Priority button selection
+            $('.priority-label').on('click', function() {
+                $('.priority-label').removeClass('active');
+                $(this).addClass('active');
+            });
+            
+            // Load available printers
+            function loadPrinters() {
+                $.ajax({
+                    url: '/api/printers',
+                    method: 'GET',
+                    success: function(response) {
+                        if (response.success) {
+                            displayPrinters(response.data.printers, response.data.current);
+                        } else {
+                            $('#printerSelection').html('<div class="alert alert-warning">' + translations.failed_load_printers + '</div>');
+                        }
+                    },
+                    error: function() {
+                        $('#printerSelection').html('<div class="alert alert-danger">' + translations.error_loading_printers + '</div>');
+                    }
+                });
+            }
+            
+            // Display printers
+            function displayPrinters(printers, currentConfig) {
+                let html = '';
+                
+                // USB Printers
+                if (printers.usb && printers.usb.length > 0) {
+                    html += '<div class="printer-group-title">' + translations.usb_printers + '</div>';
+                    printers.usb.forEach(printer => {
+                        const isActive = currentConfig.type === 'usb' && 
+                                       currentConfig.vendor_id === printer.vendor_id && 
+                                       currentConfig.product_id === printer.product_id;
+                        html += `
+                            <div class="printer-item ${isActive ? 'active' : ''}" 
+                                 data-type="usb" 
+                                 data-vendor-id="${printer.vendor_id}" 
+                                 data-product-id="${printer.product_id}">
+                                <div class="printer-icon">🖨️</div>
+                                <div class="printer-info">
+                                    <div class="printer-name">${printer.description}</div>
+                                    <div class="printer-details">${printer.vendor_name} (${printer.vendor_id}:${printer.product_id})</div>
+                                </div>
+                                ${isActive ? '<span class="printer-badge">Active</span>' : ''}
+                            </div>
+                        `;
+                    });
+                }
+                
+                // Serial Printers
+                if (printers.serial && printers.serial.length > 0) {
+                    html += '<div class="printer-group-title">' + translations.serial_ports + '</div>';
+                    printers.serial.forEach(printer => {
+                        const isActive = currentConfig.type === 'serial' && 
+                                       currentConfig.serial_port === printer.port;
+                        html += `
+                            <div class="printer-item ${isActive ? 'active' : ''}" 
+                                 data-type="serial" 
+                                 data-port="${printer.port}">
+                                <div class="printer-icon">🔌</div>
+                                <div class="printer-info">
+                                    <div class="printer-name">${printer.description}</div>
+                                    <div class="printer-details">${printer.port}</div>
+                                </div>
+                                ${isActive ? '<span class="printer-badge">Active</span>' : ''}
+                            </div>
+                        `;
+                    });
+                }
+                
+                // Manual Network Printer option
+                html += '<div class="printer-group-title">' + translations.network_printer + '</div>';
+                html += `
+                    <div class="printer-item ${currentConfig.type === 'network' ? 'active' : ''}" 
+                         id="networkPrinterItem">
+                        <div class="printer-icon">🌐</div>
+                        <div class="printer-info">
+                            <div class="printer-name">Network Printer</div>
+                            <input type="text" class="form-control form-control-sm mt-2" 
+                                   id="networkPrinterIP" 
+                                   placeholder="' + translations.enter_ip + '"
+                                   value="${currentConfig.type === 'network' ? currentConfig.network_ip || '' : ''}">
+                        </div>
+                        ${currentConfig.type === 'network' ? '<span class="printer-badge">Active</span>' : ''}
+                    </div>
+                `;
+                
+                if (printers.usb.length === 0 && printers.serial.length === 0) {
+                    html += '<div class="alert alert-warning">' + translations.no_printers + '</div>';
+                }
+                
+                $('#printerSelection').html(html);
+            }
+            
+            // Handle printer selection
+            $(document).on('click', '.printer-item', function() {
+                const $item = $(this);
+                const type = $item.data('type');
+                let printerConfig = { type: type };
+                
+                if (type === 'usb') {
+                    printerConfig.vendor_id = $item.data('vendor-id');
+                    printerConfig.product_id = $item.data('product-id');
+                } else if (type === 'serial') {
+                    printerConfig.port = $item.data('port');
+                } else if (type === 'network' || $item.attr('id') === 'networkPrinterItem') {
+                    const ip = $('#networkPrinterIP').val().trim();
+                    if (!ip) {
+                        showAlert(translations.please_enter_ip, 'warning');
+                        return;
+                    }
+                    printerConfig.type = 'network';
+                    printerConfig.ip = ip;
+                }
+                
+                // Save printer configuration
+                $.ajax({
+                    url: '/api/printers/select',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify(printerConfig),
+                    success: function(response) {
+                        if (response.success) {
+                            showAlert(translations.printer_saved, 'success');
+                            $('.printer-item').removeClass('active');
+                            $item.addClass('active');
+                            // Reload printers to show updated status
+                            loadPrinters();
+                        } else {
+                            showAlert('❌ ' + (response.error || 'Failed to save printer'), 'danger');
+                        }
+                    },
+                    error: function(xhr) {
+                        let message = 'Failed to save printer configuration';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            message = xhr.responseJSON.message;
+                        }
+                        showAlert(translations.print_error + ': ' + message, 'danger');
+                    }
+                });
+            });
+            
+            // Refresh printers button
+            $('#refreshPrintersBtn').on('click', function() {
+                $('#printerSelection').html('<div class="loading-container"><div class="spinner-border" role="status"></div></div>');
+                loadPrinters();
+            });
+            
+            // Load printers on page load
+            loadPrinters();
+            
+            // Load queue status
+            function loadQueueStatus() {
+                $.ajax({
+                    url: '/api/queue/status',
+                    method: 'GET',
+                    success: function(response) {
+                        if (response.success) {
+                            const data = response.data;
+                            $('#statTotal').text(data.total || 0);
+                            $('#statPrinted').text(data.printed || 0);
+                            $('#statPending').text(data.pending || 0);
+                            $('#statFailed').text(data.failed || 0);
+                            
+                            // Show/hide retry button
+                            if (data.failed > 0) {
+                                $('#retryFailedBtn').show();
+                            } else {
+                                $('#retryFailedBtn').hide();
+                            }
+                        }
+                    },
+                    error: function() {
+                        console.error('Failed to load queue status');
+                    }
+                });
+            }
+            
+            // Refresh queue status button
+            $('#refreshQueueBtn').on('click', function() {
+                loadQueueStatus();
+            });
+            
+            // Retry failed prints button
+            $('#retryFailedBtn').on('click', function() {
+                $.ajax({
+                    url: '/api/queue/retry',
+                    method: 'POST',
+                    success: function(response) {
+                        if (response.success) {
+                            showAlert(response.message, 'success');
+                            loadQueueStatus();
+                        }
+                    },
+                    error: function() {
+                        showAlert('Failed to retry prints', 'danger');
+                    }
+                });
+            });
+            
+            // Load queue status on page load
+            loadQueueStatus();
+            
+            // Refresh queue status periodically
+            setInterval(loadQueueStatus, 10000); // Every 10 seconds
+            
+            // Check printer status
+            function checkStatus() {
+                $.ajax({
+                    url: '/health',
+                    method: 'GET',
+                    success: function(response) {
+                        $('#statusDot').removeClass('offline');
+                        $('#statusText').text(translations.online);
+                    },
+                    error: function() {
+                        $('#statusDot').addClass('offline');
+                        $('#statusText').text(translations.offline);
+                    }
+                });
+            }
+            
+            // Check status every 30 seconds
+            checkStatus();
+            setInterval(checkStatus, 30000);
+            
+            
+            // Language selection via flags
+            $('.lang-btn').on('click', function() {
+                const language = $(this).data('lang');
+                if (language === currentLanguage) return; // Don't reload if same language
+                
+                localStorage.setItem('language', language);
+                currentLanguage = language;
+                
+                // Update visual state immediately
+                $('.lang-btn').removeClass('active');
+                $(this).addClass('active');
+                
+                // Update server configuration and get new translations
+                $.ajax({
+                    url: '/api/settings/language',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ language: language }),
+                    success: function(response) {
+                        if (response.success) {
+                            translations = response.translations;
+                            // Reload page to apply new language
+                            location.reload();
+                        }
+                    }
+                });
+            });
+            
+            // Form submission
+            $('#todoForm').on('submit', function(e) {
+                e.preventDefault();
+                
+                const text = $('#todoText').val().trim();
+                const priority = $('input[name="priority"]:checked').val();
+                
+                if (!text) {
+                    showAlert(translations.please_enter_task, 'danger');
+                    return;
+                }
+                
+                // Disable form during submission
+                $('#printBtn').prop('disabled', true);
+                $('#btnText').hide();
+                $('#btnSpinner').show();
+                
+                // Show print animation
+                $('#printAnimation').addClass('show');
+                
+                // Send print request
+                $.ajax({
+                    url: '/print',
+                    method: 'POST',
+                    data: {
+                        text: text,
+                        priority: priority
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            const message = response.queued 
+                                ? translations.print_queued || 'ToDo saved to queue for printing'
+                                : translations.print_success;
+                            showAlert(message, response.queued ? 'info' : 'success');
+                            $('#todoText').val('');
+                            $('#charCount').text('0');
+                            
+                            // Reset priority to normal
+                            $('.priority-label').removeClass('active');
+                            $('.priority-label[data-priority="3"]').addClass('active');
+                            $('input[name="priority"][value="3"]').prop('checked', true);
+                            
+                            // Refresh queue status
+                            loadQueueStatus();
+                        } else {
+                            showAlert(translations.print_error + ': ' + (response.message || translations.failed_print), 'danger');
+                        }
+                    },
+                    error: function(xhr) {
+                        let message = 'Failed to print ToDo';
+                        if (xhr.responseJSON && xhr.responseJSON.message) {
+                            message = xhr.responseJSON.message;
+                        }
+                        showAlert(translations.print_error + ': ' + message, 'danger');
+                    },
+                    complete: function() {
+                        // Re-enable form
+                        $('#printBtn').prop('disabled', false);
+                        $('#btnText').show();
+                        $('#btnSpinner').hide();
+                        
+                        // Hide print animation
+                        setTimeout(function() {
+                            $('#printAnimation').removeClass('show');
+                        }, 500);
+                    }
+                });
+            });
+            
+            // Show alert function
+            function showAlert(message, type) {
+                const alertHtml = `
+                    <div class="alert alert-${type} alert-dismissible fade show" role="alert">
+                        ${message}
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                `;
+                
+                $('#alertContainer').html(alertHtml);
+                
+                // Auto-dismiss after 5 seconds
+                setTimeout(function() {
+                    $('.alert').fadeOut('slow', function() {
+                        $(this).remove();
+                    });
+                }, 5000);
+            }
+            
+            // Keyboard shortcuts
+            $(document).on('keydown', function(e) {
+                // Ctrl/Cmd + Enter to submit
+                if ((e.ctrlKey || e.metaKey) && e.keyCode === 13) {
+                    $('#todoForm').submit();
+                }
+                
+                // Number keys 1-5 for priority
+                if (e.keyCode >= 49 && e.keyCode <= 53 && !$('#todoText').is(':focus')) {
+                    const priority = e.keyCode - 48;
+                    $(`.priority-label[data-priority="${priority}"]`).click();
+                }
+            });
+        });
+    </script>
+</body>
+</html>

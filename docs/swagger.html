@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Paperoo API Documentation</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/swagger-ui.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+        .header p {
+            margin: 0.5rem 0 0;
+            opacity: 0.9;
+            font-size: 1.1rem;
+        }
+        .version-badge {
+            display: inline-block;
+            background: rgba(255,255,255,0.2);
+            padding: 0.25rem 0.75rem;
+            border-radius: 20px;
+            font-size: 0.9rem;
+            margin-top: 1rem;
+        }
+        #swagger-ui {
+            margin: 2rem auto;
+            max-width: 1200px;
+        }
+        .swagger-ui .topbar {
+            display: none;
+        }
+        .info-section {
+            max-width: 1200px;
+            margin: 2rem auto;
+            padding: 0 2rem;
+        }
+        .info-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .info-card h2 {
+            color: #333;
+            margin-top: 0;
+            font-size: 1.5rem;
+        }
+        .code-block {
+            background: #2d3748;
+            color: #fff;
+            padding: 1rem;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            margin: 1rem 0;
+        }
+        .example-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+        .example-card {
+            background: white;
+            border: 1px solid #e0e0e0;
+            border-radius: 4px;
+            padding: 1rem;
+        }
+        .example-card h3 {
+            margin-top: 0;
+            color: #667eea;
+            font-size: 1.1rem;
+        }
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            background: #667eea;
+            color: white;
+            border-radius: 3px;
+            font-size: 0.85rem;
+            margin-right: 0.5rem;
+        }
+        .badge.get { background: #28a745; }
+        .badge.post { background: #007bff; }
+        .badge.put { background: #ffc107; color: #333; }
+        .badge.delete { background: #dc3545; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎯 Paperoo API</h1>
+        <p>REST API Dokumentation für den intelligenten Aufgaben-Drucker</p>
+        <span class="version-badge">Version 1.0.0</span>
+    </div>
+
+    <div class="info-section">
+        <div class="info-card">
+            <h2>🚀 Schnellstart</h2>
+            <p>Die Paperoo API ermöglicht es, Aufgaben direkt auf Bondruckern auszugeben. Verwenden Sie die API, um Ihre eigenen Anwendungen zu integrieren.</p>
+            
+            <h3>Basis-URL</h3>
+            <div class="code-block">http://localhost:5001</div>
+            
+            <h3>Authentifizierung</h3>
+            <p>Alle API-Anfragen (außer /health) benötigen einen Bearer Token:</p>
+            <div class="code-block">Authorization: Bearer your-api-key-here</div>
+        </div>
+
+        <div class="info-card">
+            <h2>📝 Beispiele</h2>
+            <div class="example-grid">
+                <div class="example-card">
+                    <h3>Aufgabe drucken</h3>
+                    <span class="badge post">POST</span>
+                    <code>/api/print</code>
+                    <div class="code-block">curl -X POST http://localhost:5001/api/print \
+  -H "Authorization: Bearer your-api-key" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "text": "Meeting vorbereiten",
+    "priority": 4,
+    "language": "de"
+  }'</div>
+                </div>
+                
+                <div class="example-card">
+                    <h3>Status abrufen</h3>
+                    <span class="badge get">GET</span>
+                    <code>/api/status</code>
+                    <div class="code-block">curl -X GET http://localhost:5001/api/status \
+  -H "Authorization: Bearer your-api-key"</div>
+                </div>
+                
+                <div class="example-card">
+                    <h3>Warteschlange prüfen</h3>
+                    <span class="badge get">GET</span>
+                    <code>/api/queue/status</code>
+                    <div class="code-block">curl -X GET http://localhost:5001/api/queue/status \
+  -H "Authorization: Bearer your-api-key"</div>
+                </div>
+                
+                <div class="example-card">
+                    <h3>Fehlgeschlagene wiederholen</h3>
+                    <span class="badge post">POST</span>
+                    <code>/api/queue/retry</code>
+                    <div class="code-block">curl -X POST http://localhost:5001/api/queue/retry \
+  -H "Authorization: Bearer your-api-key"</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-card">
+            <h2>🔍 Interaktive API-Dokumentation</h2>
+            <p>Nutzen Sie die interaktive Swagger UI unten, um die API zu erkunden und Anfragen direkt zu testen:</p>
+        </div>
+    </div>
+
+    <div id="swagger-ui"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/swagger-ui-bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.9.0/swagger-ui-standalone-preset.js"></script>
+    <script>
+        window.onload = function() {
+            const ui = SwaggerUIBundle({
+                url: "./openapi.yaml",
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                ],
+                plugins: [
+                    SwaggerUIBundle.plugins.DownloadUrl
+                ],
+                layout: "BaseLayout",
+                validatorUrl: null,
+                tryItOutEnabled: true,
+                supportedSubmitMethods: ['get', 'post', 'put', 'delete', 'patch'],
+                onComplete: function() {
+                    console.log("Swagger UI loaded");
+                },
+                defaultModelsExpandDepth: 1,
+                defaultModelExpandDepth: 1,
+                docExpansion: "list",
+                filter: true,
+                showRequestHeaders: true,
+                showCommonExtensions: true,
+                showMutatedRequest: true,
+                displayOperationId: false,
+                displayRequestDuration: true,
+                persistAuthorization: true
+            });
+            
+            window.ui = ui;
+        }
+    </script>
+</body>
+</html>

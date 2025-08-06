@@ -1,0 +1,502 @@
+openapi: 3.0.3
+info:
+  title: Paperoo API
+  description: |
+    # Paperoo - Task Printer API
+    
+    Die Paperoo API ermöglicht es, Aufgaben direkt auf Bondruckern auszugeben. 
+    Die API bietet Endpunkte zum Drucken von Aufgaben, Verwalten der Warteschlange 
+    und Überwachen des Druckerstatus.
+    
+    ## Authentifizierung
+    
+    Die API verwendet Bearer Token Authentifizierung. Senden Sie Ihren API-Key im Authorization Header:
+    
+    ```
+    Authorization: Bearer your-api-key-here
+    ```
+    
+    ## Basis-URL
+    
+    ```
+    http://localhost:5001
+    ```
+    
+    ## Rate Limiting
+    
+    Aktuell gibt es kein Rate Limiting, dies kann sich in zukünftigen Versionen ändern.
+    
+  version: 1.0.0
+  contact:
+    name: Paperoo Support
+    email: support@example.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:5001
+    description: Lokaler Entwicklungsserver
+  - url: http://192.168.1.95:5001
+    description: Netzwerk Server
+  - url: https://paperoo.example.com
+    description: Produktionsserver (HTTPS empfohlen)
+
+tags:
+  - name: Print
+    description: Aufgaben drucken
+  - name: Queue
+    description: Warteschlangen-Verwaltung
+  - name: Status
+    description: System- und Druckerstatus
+  - name: Configuration
+    description: Drucker- und Systemkonfiguration
+
+security:
+  - BearerAuth: []
+
+paths:
+  /api/print:
+    post:
+      tags:
+        - Print
+      summary: Aufgabe drucken
+      description: |
+        Erstellt eine neue Aufgabe und versucht diese sofort zu drucken. 
+        Falls der Drucker offline ist, wird die Aufgabe in die Warteschlange eingereiht 
+        und automatisch gedruckt, sobald der Drucker wieder verfügbar ist.
+      operationId: printTask
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - text
+              properties:
+                text:
+                  type: string
+                  description: Der zu druckende Aufgabentext
+                  example: "Dokumentation fertigstellen"
+                  minLength: 1
+                  maxLength: 500
+                priority:
+                  type: integer
+                  description: Prioritätsstufe der Aufgabe
+                  minimum: 1
+                  maximum: 5
+                  default: 3
+                  example: 4
+                language:
+                  type: string
+                  description: Sprache für den Ausdruck (überschreibt Standardsprache)
+                  enum: [de, en]
+                  default: de
+                  example: de
+            examples:
+              simple:
+                summary: Einfache Aufgabe
+                value:
+                  text: "Einkaufen gehen"
+              priority:
+                summary: Aufgabe mit Priorität
+                value:
+                  text: "Wichtiges Meeting vorbereiten"
+                  priority: 5
+              english:
+                summary: Englische Aufgabe
+                value:
+                  text: "Complete documentation"
+                  priority: 4
+                  language: en
+      responses:
+        '200':
+          description: Aufgabe erfolgreich verarbeitet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrintResponse'
+              examples:
+                printed:
+                  summary: Erfolgreich gedruckt
+                  value:
+                    success: true
+                    message: "ToDo printed successfully"
+                    data:
+                      id: 123
+                      text: "Dokumentation fertigstellen"
+                      priority: 4
+                      language: de
+                      queued: false
+                queued:
+                  summary: In Warteschlange eingereiht
+                  value:
+                    success: true
+                    message: "Saved to queue for retry: Printer offline"
+                    data:
+                      id: 124
+                      text: "Einkaufen gehen"
+                      priority: 3
+                      language: de
+                      queued: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/status:
+    get:
+      tags:
+        - Status
+      summary: System- und Druckerstatus
+      description: Liefert den aktuellen Status des Druckers und der Systemkonfiguration
+      operationId: getStatus
+      responses:
+        '200':
+          description: Status erfolgreich abgerufen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatusResponse'
+              example:
+                success: true
+                data:
+                  printer_configured: true
+                  mqtt_enabled: false
+                  mqtt_connected: false
+                  printer_active: false
+                  last_print_time: "2024-01-20T10:30:00"
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/queue/status:
+    get:
+      tags:
+        - Queue
+      summary: Warteschlangen-Statistiken
+      description: |
+        Liefert detaillierte Statistiken über die Druckwarteschlange, 
+        einschließlich der Anzahl gedruckter, wartender und fehlgeschlagener Aufgaben.
+      operationId: getQueueStatus
+      responses:
+        '200':
+          description: Warteschlangen-Status erfolgreich abgerufen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueueStatusResponse'
+              example:
+                success: true
+                data:
+                  total: 150
+                  pending: 2
+                  printed: 145
+                  failed: 3
+                  today: 12
+                  queue_running: true
+                  retry_interval: 30
+                  max_attempts: 10
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/queue/todos:
+    get:
+      tags:
+        - Queue
+      summary: Letzte Aufgaben abrufen
+      description: Liefert eine Liste der zuletzt erstellten Aufgaben mit ihrem Status
+      operationId: getRecentTodos
+      parameters:
+        - name: limit
+          in: query
+          description: Maximale Anzahl zurückzugebender Aufgaben
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 50
+          example: 20
+      responses:
+        '200':
+          description: Aufgabenliste erfolgreich abgerufen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodoListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/queue/pending:
+    get:
+      tags:
+        - Queue
+      summary: Wartende Aufgaben abrufen
+      description: Liefert alle Aufgaben, die noch auf den Druck warten
+      operationId: getPendingTodos
+      responses:
+        '200':
+          description: Liste wartender Aufgaben
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TodoListResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /api/queue/retry:
+    post:
+      tags:
+        - Queue
+      summary: Fehlgeschlagene Aufgaben wiederholen
+      description: |
+        Setzt alle fehlgeschlagenen Aufgaben zurück und versucht sie erneut zu drucken.
+        Dies ist nützlich, wenn der Drucker nach einem Fehler wieder verfügbar ist.
+      operationId: retryFailed
+      responses:
+        '200':
+          description: Wiederholung erfolgreich gestartet
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Reset 3 failed todos for retry"
+                  count:
+                    type: integer
+                    description: Anzahl der zurückgesetzten Aufgaben
+                    example: 3
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/ServerError'
+
+  /health:
+    get:
+      tags:
+        - Status
+      summary: Health Check
+      description: Einfacher Health Check Endpunkt für Monitoring
+      operationId: healthCheck
+      security: []  # Kein API-Key erforderlich
+      responses:
+        '200':
+          description: Service ist gesund
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  service:
+                    type: string
+                    example: "Paperoo Server"
+                  mqtt_enabled:
+                    type: boolean
+                    example: false
+                  mqtt_connected:
+                    type: boolean
+                    example: false
+                  env_watching:
+                    type: boolean
+                    example: true
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      description: Bearer Token Authentifizierung mit API-Key
+
+  schemas:
+    PrintResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          description: Ob die Operation erfolgreich war
+        message:
+          type: string
+          description: Statusnachricht
+        data:
+          type: object
+          properties:
+            id:
+              type: integer
+              description: Eindeutige ID der Aufgabe
+            text:
+              type: string
+              description: Der Aufgabentext
+            priority:
+              type: integer
+              description: Prioritätsstufe (1-5)
+            language:
+              type: string
+              description: Verwendete Sprache
+            queued:
+              type: boolean
+              description: Ob die Aufgabe in die Warteschlange eingereiht wurde
+
+    StatusResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            printer_configured:
+              type: boolean
+              description: Ob ein Drucker konfiguriert ist
+            mqtt_enabled:
+              type: boolean
+              description: Ob MQTT aktiviert ist
+            mqtt_connected:
+              type: boolean
+              description: Ob MQTT verbunden ist
+            printer_active:
+              type: boolean
+              description: Ob der Drucker aktiv ist
+            last_print_time:
+              type: string
+              format: date-time
+              description: Zeitpunkt des letzten Drucks
+              nullable: true
+
+    QueueStatusResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: object
+          properties:
+            total:
+              type: integer
+              description: Gesamtanzahl aller Aufgaben
+            pending:
+              type: integer
+              description: Anzahl wartender Aufgaben
+            printed:
+              type: integer
+              description: Anzahl erfolgreich gedruckter Aufgaben
+            failed:
+              type: integer
+              description: Anzahl fehlgeschlagener Aufgaben
+            today:
+              type: integer
+              description: Heute gedruckte Aufgaben
+            queue_running:
+              type: boolean
+              description: Ob die Warteschlange aktiv ist
+            retry_interval:
+              type: integer
+              description: Sekunden zwischen Wiederholungsversuchen
+            max_attempts:
+              type: integer
+              description: Maximale Anzahl von Druckversuchen
+
+    TodoListResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Todo'
+
+    Todo:
+      type: object
+      properties:
+        id:
+          type: integer
+          description: Eindeutige ID
+        text:
+          type: string
+          description: Aufgabentext
+        priority:
+          type: integer
+          description: Priorität (1-5)
+        status:
+          type: string
+          enum: [pending, printed, failed]
+          description: Aktueller Status
+        created_at:
+          type: string
+          format: date-time
+          description: Erstellungszeitpunkt
+        printed_at:
+          type: string
+          format: date-time
+          description: Druckzeitpunkt
+          nullable: true
+        print_attempts:
+          type: integer
+          description: Anzahl der Druckversuche
+        error_message:
+          type: string
+          description: Fehlermeldung bei fehlgeschlagenem Druck
+          nullable: true
+
+    ErrorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          description: Fehlerkategorie
+        message:
+          type: string
+          description: Detaillierte Fehlermeldung
+
+  responses:
+    BadRequest:
+      description: Ungültige Anfrage
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: "No data provided"
+            message: "Please provide JSON data with text and priority"
+
+    Unauthorized:
+      description: Authentifizierung fehlgeschlagen
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: "Invalid API key"
+            message: "The provided API key is invalid"
+
+    ServerError:
+      description: Interner Serverfehler
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorResponse'
+          example:
+            success: false
+            error: "Server error"
+            message: "An internal server error occurred"

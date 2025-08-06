@@ -1,0 +1,37 @@
+/* Plus Jakarta Sans Font - Local */
+
+/* Regular 400 */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../fonts/plus-jakarta-sans-400.ttf') format('truetype');
+}
+
+/* Semi-Bold 600 */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('../fonts/plus-jakarta-sans-600.ttf') format('truetype');
+}
+
+/* Bold 700 */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('../fonts/plus-jakarta-sans-700.ttf') format('truetype');
+}
+
+/* Extra-Bold 800 */
+@font-face {
+  font-family: 'Plus Jakarta Sans';
+  font-style: normal;
+  font-weight: 800;
+  font-display: swap;
+  src: url('../fonts/plus-jakarta-sans-800.ttf') format('truetype');
+}

@@ -1,0 +1,22 @@
+{
+  "name": "Paperoo",
+  "short_name": "Paperoo",
+  "description": "Smart receipt printer task manager",
+  "theme_color": "#5d87ff",
+  "background_color": "#f4f7fb",
+  "display": "standalone",
+  "orientation": "portrait",
+  "start_url": "/",
+  "icons": [
+    {
+      "src": "/static/icons/android-chrome-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/static/icons/android-chrome-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

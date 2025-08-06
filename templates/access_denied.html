@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Access Denied - Paperoo</title>
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icons/favicon.ico') }}">
+    
+    <!-- Bootstrap CSS -->
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+    <!-- Local Fonts -->
+    <link href="{{ url_for('static', filename='css/fonts.css') }}" rel="stylesheet">
+    <!-- Modern Style CSS -->
+    <link href="{{ url_for('static', filename='css/modern-style.css') }}" rel="stylesheet">
+    
+    <style>
+        .error-wrapper {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--body-bg);
+        }
+        
+        .error-card {
+            width: 100%;
+            max-width: 500px;
+            margin: 0 1rem;
+            text-align: center;
+        }
+        
+        .error-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+        }
+        
+        .error-title {
+            font-size: 1.75rem;
+            font-weight: 700;
+            color: var(--dark);
+            margin-bottom: 0.5rem;
+        }
+        
+        .error-message {
+            color: var(--muted);
+            font-size: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .error-details {
+            background: var(--light);
+            border-radius: var(--border-radius-sm);
+            padding: 1rem;
+            margin-top: 1.5rem;
+            font-size: 0.9rem;
+            color: var(--muted);
+        }
+        
+        .error-code {
+            font-family: monospace;
+            color: var(--danger);
+        }
+    </style>
+</head>
+<body>
+    <div class="error-wrapper">
+        <div class="error-card">
+            <div class="card">
+                <div class="card-body p-4">
+                    <div class="error-icon">🚫</div>
+                    <h1 class="error-title">Access Denied</h1>
+                    <p class="error-message">
+                        The web interface is only accessible from local network addresses.
+                    </p>
+                    
+                    <div class="alert alert-warning">
+                        <strong>Your IP Address:</strong> <span class="error-code">{{ client_ip }}</span><br>
+                        <small>This IP is not in the allowed network range.</small>
+                    </div>
+                    
+                    <div class="error-details">
+                        <strong>Need Access?</strong><br>
+                        <p class="mb-2">The web interface is restricted to local network access only for security reasons.</p>
+                        <p class="mb-0">If you need remote access, please use the API with proper authentication or connect via VPN to your local network.</p>
+                    </div>
+                    
+                    <div class="mt-4">
+                        <small class="text-muted">
+                            API endpoints remain accessible with Bearer token authentication.
+                        </small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
