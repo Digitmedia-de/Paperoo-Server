@@ -63,11 +63,15 @@ class PrintQueueManager:
                         except:
                             pass
                     
+                    # Mark as retry if this has been attempted before
+                    is_retry = todo['print_attempts'] > 0
+                    
                     success, message = self.printer_manager.print_todo(
                         todo['text'], 
                         todo['priority'],
                         self.mqtt_handler,
-                        language=language
+                        language=language,
+                        is_retry=is_retry
                     )
                     
                     if success:
