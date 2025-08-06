@@ -24,9 +24,14 @@ load_dotenv()
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    force=True  # Force reconfiguration of logging
 )
 logger = logging.getLogger(__name__)
+
+# Set specific log levels for modules
+logging.getLogger('modules.mqtt_handler').setLevel(logging.INFO)
+logging.getLogger('modules.printer_manager').setLevel(logging.INFO)
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -91,7 +96,7 @@ stop_watching = False
 
 def reload_config():
     """Reload configuration from .env file"""
-    global config, printer_manager, mqtt_handler, auth_manager, last_mtime
+    global config, printer_manager, mqtt_handler, auth_manager, last_mtime, queue_manager
     
     try:
         # Reload environment variables
@@ -129,9 +134,23 @@ def reload_config():
             printer_manager = PrinterManager(config)
             
             # Reinitialize MQTT if needed
-            if mqtt_handler:
-                mqtt_handler.cleanup()
-            mqtt_handler = MQTTHandler(config) if config['MQTT_ENABLED'].lower() == 'true' else None
+            old_mqtt_handler = mqtt_handler
+            if config['MQTT_ENABLED'].lower() == 'true':
+                if old_mqtt_handler:
+                    logger.info("Reloading MQTT handler with new configuration...")
+                    old_mqtt_handler.cleanup()
+                else:
+                    logger.info("Enabling MQTT handler...")
+                mqtt_handler = MQTTHandler(config)
+            else:
+                if old_mqtt_handler:
+                    logger.info("Disabling MQTT handler...")
+                    old_mqtt_handler.cleanup()
+                mqtt_handler = None
+            
+            # Update queue manager with new MQTT handler
+            if 'queue_manager' in globals():
+                queue_manager.mqtt_handler = mqtt_handler
             
             # Update auth manager
             auth_manager = AuthManager(os.getenv('API_KEY'))
@@ -691,5 +710,22 @@ if __name__ == '__main__':
     port = int(os.getenv('PORT', 5001))
     debug = os.getenv('DEBUG', 'False').lower() == 'true'
     
+    logger.info("="*60)
     logger.info(f"Starting Paperoo Server on {host}:{port}")
+    logger.info("="*60)
+    
+    # Show MQTT status
+    if config.get('MQTT_ENABLED', 'false').lower() == 'true':
+        logger.info(f"MQTT: Enabled - Connecting to {config.get('MQTT_BROKER')}:{config.get('MQTT_PORT')}")
+        # Give MQTT a moment to connect
+        time.sleep(2)
+        if mqtt_handler and mqtt_handler.connected:
+            logger.info("MQTT: ✓ Connected successfully")
+        else:
+            logger.warning("MQTT: ⚠ Not connected yet (will retry in background)")
+    else:
+        logger.info("MQTT: Disabled")
+    
+    logger.info("="*60)
+    
     app.run(host=host, port=port, debug=debug)

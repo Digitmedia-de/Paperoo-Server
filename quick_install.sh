@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# ToDo Printer Server - Universal Installation Script
-# Repository: https://github.com/Digitmedia-de/ToDo-Printer-Server
+# Paperoo Server - Universal Installation Script
+# Repository: https://github.com/Digitmedia-de/Paperoo-Server
 # Supports: x86_64, ARM (Raspberry Pi), Debian/Ubuntu
 
 # Don't exit on error immediately
@@ -15,7 +15,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}================================================${NC}"
-echo -e "${BLUE}    ToDo Printer Server - Universal Installer  ${NC}"
+echo -e "${BLUE}         Paperoo Server - Universal Installer      ${NC}"
 echo -e "${BLUE}================================================${NC}"
 echo ""
 
@@ -80,7 +80,7 @@ echo -e "${GREEN}✓ System dependencies installed${NC}"
 # Step 2: Check if we're in the right directory
 if [[ ! -f "app.py" ]]; then
     echo -e "${RED}Error: app.py not found!${NC}"
-    echo -e "${RED}Please run this script from the ToDo-Printer-Server directory.${NC}"
+    echo -e "${RED}Please run this script from the Paperoo-Server directory.${NC}"
     exit 1
 fi
 
@@ -304,9 +304,9 @@ echo ""
 echo -e "${YELLOW}Step 9: Setting up autostart service...${NC}"
 
 # Create systemd service file
-SERVICE_FILE="/etc/systemd/system/todo-printer.service"
+SERVICE_FILE="/etc/systemd/system/paperoo.service"
 SERVICE_CONTENT="[Unit]
-Description=ToDo Printer Server
+Description=Paperoo Server
 After=network.target
 
 [Service]
@@ -334,43 +334,43 @@ if [[ "$install_service" =~ ^([yY][eE][sS]|[yY])$ ]]; then
     sudo systemctl daemon-reload
     
     # Enable service for autostart
-    sudo systemctl enable todo-printer.service
+    sudo systemctl enable paperoo.service
     
     echo -e "${GREEN}✓ Service installed and enabled for autostart${NC}"
     echo ""
     echo "Service commands:"
-    echo -e "  Start:   ${BLUE}sudo systemctl start todo-printer${NC}"
-    echo -e "  Stop:    ${BLUE}sudo systemctl stop todo-printer${NC}"
-    echo -e "  Status:  ${BLUE}sudo systemctl status todo-printer${NC}"
-    echo -e "  Logs:    ${BLUE}sudo journalctl -u todo-printer -f${NC}"
-    echo -e "  Disable: ${BLUE}sudo systemctl disable todo-printer${NC}"
+    echo -e "  Start:   ${BLUE}sudo systemctl start paperoo${NC}"
+    echo -e "  Stop:    ${BLUE}sudo systemctl stop paperoo${NC}"
+    echo -e "  Status:  ${BLUE}sudo systemctl status paperoo${NC}"
+    echo -e "  Logs:    ${BLUE}sudo journalctl -u paperoo -f${NC}"
+    echo -e "  Disable: ${BLUE}sudo systemctl disable paperoo${NC}"
     
     echo ""
     echo -e "${YELLOW}Do you want to start the service now? (y/n)${NC}"
     read -r start_now
     
     if [[ "$start_now" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-        sudo systemctl start todo-printer
+        sudo systemctl start paperoo
         sleep 2
         
         # Check if service is running
-        if systemctl is-active --quiet todo-printer; then
+        if systemctl is-active --quiet paperoo; then
             echo -e "${GREEN}✓ Service started successfully!${NC}"
             echo -e "Server is running at: ${BLUE}http://localhost:5001${NC}"
         else
             echo -e "${RED}Service failed to start. Check logs with:${NC}"
-            echo -e "${BLUE}sudo journalctl -u todo-printer -n 50${NC}"
+            echo -e "${BLUE}sudo journalctl -u paperoo -n 50${NC}"
         fi
     fi
 else
     echo -e "${YELLOW}Skipping service installation${NC}"
     echo "You can install it later by running:"
-    echo -e "${BLUE}sudo bash -c 'cat > /etc/systemd/system/todo-printer.service << EOF"
+    echo -e "${BLUE}sudo bash -c 'cat > /etc/systemd/system/paperoo.service << EOF"
     echo "$SERVICE_CONTENT"
     echo "EOF'"
     echo "sudo systemctl daemon-reload"
-    echo "sudo systemctl enable todo-printer"
-    echo "sudo systemctl start todo-printer${NC}"
+    echo "sudo systemctl enable paperoo"
+    echo "sudo systemctl start paperoo${NC}"
 fi
 
 # Final instructions
@@ -403,15 +403,15 @@ echo -e "   ${BLUE}http://localhost:5001${NC}"
 echo ""
 
 # Check if service is running
-if systemctl is-active --quiet todo-printer 2>/dev/null; then
-    echo -e "${GREEN}✓ ToDo Printer Server is already running as a service${NC}"
+if systemctl is-active --quiet paperoo 2>/dev/null; then
+    echo -e "${GREEN}✓ Paperoo Server is already running as a service${NC}"
     echo -e "Access the web interface at: ${BLUE}http://localhost:5001${NC}"
 else
     # Ask if user wants to start the server now (if not installed as service)
     echo -e "${YELLOW}Do you want to start the server now? (y/n)${NC}"
     read -r response
     if [[ "$response" =~ ^([yY][eE][sS]|[yY])$ ]]; then
-        echo -e "${GREEN}Starting ToDo Printer Server...${NC}"
+        echo -e "${GREEN}Starting Paperoo Server...${NC}"
         echo -e "${YELLOW}Press Ctrl+C to stop${NC}"
         python app.py
     fi

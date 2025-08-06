@@ -121,7 +121,12 @@ class PrinterManager:
                 
                 # Set up timeout timer for MQTT
                 if mqtt_handler and self.config.get('MQTT_ENABLED', 'false').lower() == 'true':
-                    timeout_minutes = int(self.config.get('MQTT_TIMEOUT_MINUTES', 30))
+                    # Cancel existing timer if any
+                    if self.timeout_timer:
+                        self.timeout_timer.cancel()
+                    
+                    timeout_minutes = float(self.config.get('MQTT_TIMEOUT_MINUTES', 30))
+                    logger.info(f"Setting MQTT timeout timer for {timeout_minutes} minutes")
                     self.timeout_timer = threading.Timer(
                         timeout_minutes * 60,
                         self._handle_timeout,
@@ -258,10 +263,15 @@ class PrinterManager:
     def _handle_timeout(self, mqtt_handler):
         """Handle printer timeout"""
         with self.lock:
+            logger.info("MQTT timeout triggered - sending power off message")
             if mqtt_handler:
-                mqtt_handler.send_after_timeout()
+                success = mqtt_handler.send_after_timeout()
+                if success:
+                    logger.info("MQTT timeout message sent successfully")
+                else:
+                    logger.warning("Failed to send MQTT timeout message")
                 self.printer_active = False
-                logger.info("Printer timeout - sent power off message")
+            self.timeout_timer = None  # Clear the timer reference
     
     def cleanup(self):
         """Clean up printer resources"""

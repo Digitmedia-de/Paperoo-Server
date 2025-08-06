@@ -1,58 +1,58 @@
 # Paperoo 🎯
 
-Ein intelligenter Aufgaben-Manager mit Bondruckerfunktion. Drucke deine Aufgaben sofort auf Bondrucker mit einer modernen Web-Oberfläche und leistungsstarker API.
+An intelligent task manager with receipt printer functionality. Print your tasks instantly on receipt printers with a modern web interface and powerful API.
 
 ## ✨ Features
 
-- 🖨️ **Direktdruck** auf Bon-/POS-Drucker (USB, Serial, Netzwerk)
-- 🌐 **Moderne Web-Oberfläche** mit responsivem Design
-- 📱 **REST API** mit Bearer Token Authentifizierung
-- 🔐 **Web-Authentifizierung** mit Session-Management und IP-Whitelist
-- 🌍 **Mehrsprachig** (Deutsch/Englisch) - auch per API steuerbar
-- ⭐ **5-Stufen Prioritätssystem** für Aufgaben
-- 🤖 **KI-gestützte Motivationssprüche** (OpenAI Integration)
-- 📊 **Warteschlangen-Management** mit automatischem Retry
-- 🔌 **MQTT Integration** für Drucker-Energieverwaltung
-- ⏱️ **Automatisches Timeout-Management**
-- 🔄 **Hot-Reload** der Konfiguration (.env Änderungen)
-- 📈 **Statistiken** und Queue-Monitoring
+- 🖨️ **Direct printing** on receipt/POS printers (USB, Serial, Network)
+- 🌐 **Modern web interface** with responsive design
+- 📱 **REST API** with Bearer Token authentication
+- 🔐 **Web authentication** with session management and IP whitelist
+- 🌍 **Multilingual** (German/English) - controllable via API
+- ⭐ **5-level priority system** for tasks
+- 🤖 **AI-powered motivational quotes** (OpenAI integration)
+- 📊 **Queue management** with automatic retry
+- 🔌 **MQTT integration** for printer power management
+- ⏱️ **Automatic timeout management**
+- 🔄 **Hot-reload** of configuration (.env changes)
+- 📈 **Statistics** and queue monitoring
 
-## 🚀 Schnellinstallation
+## 🚀 Quick Installation
 
-### Voraussetzungen
+### Prerequisites
 
-- Linux (Debian 11+, Ubuntu 20.04+) oder macOS
-- Python 3.9 oder höher
+- Linux (Debian 11+, Ubuntu 20.04+) or macOS
+- Python 3.9 or higher
 - Git
 
-### Installation mit Skript
+### Installation with Script
 
 ```bash
-# 1. Projekt herunterladen
+# 1. Download project
 cd /opt
 sudo git clone https://github.com/yourusername/paperoo.git
 sudo chown -R $USER:$USER /opt/paperoo
 cd paperoo
 
-# 2. Automatische Installation
+# 2. Automatic installation
 chmod +x quick_install.sh
 ./quick_install.sh
 
-# 3. Konfiguration anpassen
+# 3. Adjust configuration
 nano .env
 ```
 
-Das Installationsskript erledigt automatisch:
-- ✅ Installation aller Systemabhängigkeiten
-- ✅ Erstellung der Python-Umgebung
-- ✅ Installation der Python-Pakete
-- ✅ Generierung sicherer API-Keys
-- ✅ Einrichtung der Druckerberechtigungen
-- ✅ Erkennung angeschlossener USB-Drucker
+The installation script automatically handles:
+- ✅ Installation of all system dependencies
+- ✅ Creation of Python environment
+- ✅ Installation of Python packages
+- ✅ Generation of secure API keys
+- ✅ Setup of printer permissions
+- ✅ Detection of connected USB printers
 
-## 📋 Manuelle Installation
+## 📋 Manual Installation
 
-### 1. Abhängigkeiten installieren
+### 1. Install Dependencies
 
 **Linux (Debian/Ubuntu):**
 ```bash
@@ -66,71 +66,71 @@ sudo apt-get install -y python3 python3-venv python3-pip \
 brew install python3 libusb
 ```
 
-### 2. Python-Umgebung einrichten
+### 2. Setup Python Environment
 
 ```bash
-# Virtuelle Umgebung erstellen
+# Create virtual environment
 python3 -m venv venv
 
-# Aktivieren
+# Activate
 source venv/bin/activate  # Linux/macOS
-# oder
+# or
 venv\Scripts\activate     # Windows
 
-# Pakete installieren
+# Install packages
 pip install -r requirements.txt
 ```
 
-### 3. Konfiguration
+### 3. Configuration
 
 ```bash
-# Vorlage kopieren
+# Copy template
 cp .env.example .env
 
-# Bearbeiten
-nano .env  # oder Editor deiner Wahl
+# Edit
+nano .env  # or your preferred editor
 ```
 
-### 4. Server starten
+### 4. Start Server
 
 ```bash
-# Virtuelle Umgebung aktivieren
+# Activate virtual environment
 source venv/bin/activate
 
-# Server starten
+# Start server
 python app.py
 ```
 
-Die Anwendung läuft dann unter: `http://localhost:5001`
+The application will run at: `http://localhost:5001`
 
-## ⚙️ Konfiguration
+## ⚙️ Configuration
 
-### Wichtige Einstellungen in .env
+### Important Settings in .env
 
 ```env
-# API Sicherheit
+# API Security
 API_KEY=your-secure-api-key-here
 SECRET_KEY=your-flask-secret-key-here
 
-# Drucker
+# Printer
 PRINTER_TYPE=usb  # usb, serial, network
-PRINTER_VENDOR_ID=0x04b8  # Für USB (mit lsusb ermitteln)
+PRINTER_VENDOR_ID=0x04b8  # For USB (determine with lsusb)
 PRINTER_PRODUCT_ID=0x0e15
 
-# Sprache
-LANGUAGE=de  # de oder en
+# Language
+LANGUAGE=en  # de or en
 
-# Web-Authentifizierung (optional)
+# Web Authentication (optional)
 WEB_AUTH_ENABLED=true
 WEB_USERNAME=admin
 WEB_PASSWORD=secure-password
-WEB_SESSION_TIMEOUT=1440  # Minuten
+WEB_SESSION_TIMEOUT=1440  # minutes
 
-# IP-Whitelist (optional)
+# IP Whitelist (optional)
 WEB_IP_WHITELIST_ENABLED=true
 WEB_IP_WHITELIST=192.168.0.0/16,10.0.0.0/8
 
-# OpenAI für Motivationssprüche (optional)
+# OpenAI for motivational quotes (optional)
 OPENAI_API_KEY=sk-...
 MOTIVATION_ENABLED=true
 MOTIVATION_MODEL=gpt-4o-mini
@@ -140,19 +140,19 @@ MQTT_ENABLED=false
 MQTT_BROKER=localhost
 ```
 
-## 🔌 API-Dokumentation
+## 🔌 API Documentation
 
-### Authentifizierung
+### Authentication
 
-Die API verwendet Bearer Token Authentifizierung:
+The API uses Bearer Token authentication:
 
 ```bash
 Authorization: Bearer your-api-key
 ```
 
-### Hauptendpunkte
+### Main Endpoints
 
-#### Aufgabe drucken
+#### Print Task
 `POST /api/print`
 
 ```bash
@@ -160,32 +160,32 @@ curl -X POST http://localhost:5001/api/print \
   -H "Authorization: Bearer your-api-key" \
   -H "Content-Type: application/json" \
   -d '{
-    "text": "Dokumentation fertigstellen",
+    "text": "Complete documentation",
     "priority": 4,
-    "language": "de"
+    "language": "en"
   }'
 ```
 
-**Parameter:**
-- `text` (string, required): Aufgabentext
-- `priority` (integer, 1-5): Priorität (Standard: 3)
-- `language` (string): Sprache für Ausdruck ("de" oder "en")
+**Parameters:**
+- `text` (string, required): Task text
+- `priority` (integer, 1-5): Priority (default: 3)
+- `language` (string): Language for printout ("de" or "en")
 
-**Antwort:**
+**Response:**
 ```json
 {
   "success": true,
   "message": "ToDo printed successfully",
   "data": {
     "id": 123,
-    "text": "Dokumentation fertigstellen",
+    "text": "Complete documentation",
     "priority": 4,
-    "language": "de"
+    "language": "en"
   }
 }
 ```
 
-#### Status abrufen
+#### Get Status
 `GET /api/status`
 
 ```bash
@@ -193,88 +193,88 @@ curl -X GET http://localhost:5001/api/status \
   -H "Authorization: Bearer your-api-key"
 ```
 
-#### Warteschlangen-Status
+#### Queue Status
 `GET /api/queue/status`
 
-Liefert Statistiken über gedruckte, wartende und fehlgeschlagene Aufgaben.
+Returns statistics about printed, pending, and failed tasks.
 
-#### Fehlgeschlagene wiederholen
+#### Retry Failed
 `POST /api/queue/retry`
 
-Startet erneuten Druckversuch für alle fehlgeschlagenen Aufgaben.
+Starts retry attempt for all failed tasks.
 
-## 🖥️ Web-Interface
+## 🖥️ Web Interface
 
 ### Features
 
-- **Aufgabeneingabe** mit Zeichenzähler (max. 500)
-- **Prioritätsauswahl** mit visuellen Sternen (1-5)
-- **Live-Druckerstatus** und Verbindungsanzeige
-- **Queue-Monitoring** inline in der Kopfzeile
-- **Sprachumschaltung** (DE/EN) mit Sofort-Effekt
-- **Session-basierte Authentifizierung** (optional)
-- **IP-Whitelist** für zusätzliche Sicherheit
+- **Task input** with character counter (max. 500)
+- **Priority selection** with visual stars (1-5)
+- **Live printer status** and connection display
+- **Queue monitoring** inline in header
+- **Language switching** (DE/EN) with instant effect
+- **Session-based authentication** (optional)
+- **IP whitelist** for additional security
 
-### Zugriff
+### Access
 
-Standard: `http://localhost:5001`
+Default: `http://localhost:5001`
 
-Mit Authentifizierung:
-1. Login unter `/login`
-2. Session bleibt 24 Stunden aktiv (konfigurierbar)
-3. "Remember Me" Option für 30 Tage
+With authentication:
+1. Login at `/login`
+2. Session stays active for 24 hours (configurable)
+3. "Remember Me" option for 30 days
 
-## 🖨️ Unterstützte Drucker
+## 🖨️ Supported Printers
 
-- **Epson TM-Serie** (TM-T88, TM-T20, TM-T70, etc.)
-- **Star Micronics** Drucker
-- **Citizen** Bondrucker
-- Alle **ESC/POS kompatiblen** Drucker
-- Anschluss über **USB**, **Serial** oder **Netzwerk**
+- **Epson TM-Series** (TM-T88, TM-T20, TM-T70, etc.)
+- **Star Micronics** printers
+- **Citizen** receipt printers
+- All **ESC/POS compatible** printers
+- Connection via **USB**, **Serial** or **Network**
 
-### Drucker-Erkennung
+### Printer Detection
 
-USB-Drucker finden:
+Find USB printer:
 ```bash
 lsusb
 # Bus 001 Device 004: ID 04b8:0e15 Seiko Epson Corp.
 ```
 
-Die Vendor-ID (04b8) und Product-ID (0e15) in .env eintragen.
+Enter the Vendor-ID (04b8) and Product-ID (0e15) in .env.
 
-## 🔐 Sicherheit
+## 🔐 Security
 
 ### Best Practices
 
-1. **Starke API-Keys generieren:**
+1. **Generate strong API keys:**
    ```bash
    openssl rand -hex 32
    ```
 
-2. **HTTPS in Produktion** (nginx Reverse Proxy)
+2. **HTTPS in production** (nginx reverse proxy)
 
-3. **Web-Authentifizierung aktivieren:**
-   - Username/Passwort Schutz
-   - Session-Timeout konfigurieren
-   - IP-Whitelist für lokale Netze
+3. **Enable web authentication:**
+   - Username/password protection
+   - Configure session timeout
+   - IP whitelist for local networks
 
-4. **Berechtigungen:**
-   - Als non-root User ausführen
-   - Drucker-Gruppe korrekt setzen
+4. **Permissions:**
+   - Run as non-root user
+   - Set printer group correctly
 
 5. **Firewall:**
-   - Nur benötigte Ports öffnen (5001)
+   - Only open required ports (5001)
 
-## 🛠️ Systemdienst einrichten
+## 🛠️ Setup System Service
 
 ### Linux (systemd)
 
-Service-Datei erstellen:
+Create service file:
 ```bash
 sudo nano /etc/systemd/system/paperoo.service
 ```
 
-Inhalt:
+Content:
 ```ini
 [Unit]
 Description=Paperoo Task Printer
@@ -293,7 +293,7 @@ RestartSec=10
 WantedBy=multi-user.target
 ```
 
-Aktivieren und starten:
+Enable and start:
 ```bash
 sudo systemctl daemon-reload
 sudo systemctl enable paperoo
@@ -301,41 +301,41 @@ sudo systemctl start paperoo
 sudo systemctl status paperoo
 ```
 
-## 🐛 Fehlerbehebung
+## 🐛 Troubleshooting
 
-### USB-Drucker wird nicht erkannt
+### USB Printer Not Recognized
 
 ```bash
-# Drucker-Berechtigungen prüfen
+# Check printer permissions
 ls -l /dev/bus/usb/*/*
 
-# Benutzer zur lp-Gruppe hinzufügen
+# Add user to lp group
 sudo usermod -a -G lp $USER
 
-# Udev-Regel erstellen
+# Create udev rule
 echo 'SUBSYSTEM=="usb", ATTR{idVendor}=="04b8", ATTR{idProduct}=="0e15", MODE="0666"' | \
 sudo tee /etc/udev/rules.d/99-printer.rules
 
-# System neu laden
+# Reload system
 sudo udevadm control --reload-rules
 
-# Aus- und wieder einloggen!
+# Log out and back in!
 ```
 
-### Port 5001 belegt
+### Port 5001 Already in Use
 
 ```bash
-# Prüfen was den Port nutzt
+# Check what's using the port
 sudo lsof -i :5001
 
-# Alternative: Port in .env ändern
+# Alternative: Change port in .env
 PORT=5002
 ```
 
-### Python venv Fehler (Debian 12)
+### Python venv Error (Debian 12)
 
 ```bash
-# python3-full installieren
+# Install python3-full
 sudo apt-get install python3-full python3-venv
 ```
 
@@ -343,32 +343,32 @@ sudo apt-get install python3-full python3-venv
 
 ### Logs
 
-- Anwendungs-Logs: `logs/` Verzeichnis
-- System-Logs: `sudo journalctl -u paperoo -f`
+- Application logs: `logs/` directory
+- System logs: `sudo journalctl -u paperoo -f`
 
-### Queue-Status
+### Queue Status
 
-Web-Interface zeigt in Echtzeit:
-- Gesamt gedruckte Aufgaben
-- Wartende Aufgaben
-- Fehlgeschlagene Aufgaben
-- Heute gedruckte Aufgaben
+Web interface shows in real-time:
+- Total printed tasks
+- Pending tasks
+- Failed tasks
+- Today's printed tasks
 
-## 🤝 Beitragen
+## 🤝 Contributing
 
-Contributions sind willkommen! Bitte erstelle einen Pull Request oder öffne ein Issue.
+Contributions are welcome! Please create a pull request or open an issue.
 
-## 📝 Lizenz
+## 📝 License
 
-MIT License - siehe [LICENSE](LICENSE) Datei
+MIT License - see [LICENSE](LICENSE) file
 
 ## 🆘 Support
 
-Bei Problemen:
-1. Logs prüfen (`logs/` Verzeichnis)
-2. Issue auf GitHub erstellen
-3. Debug-Modus aktivieren (`DEBUG=True` in .env)
+For issues:
+1. Check logs (`logs/` directory)
+2. Create issue on GitHub
+3. Enable debug mode (`DEBUG=True` in .env)
 
 ---
 
-**Paperoo** - Aufgaben greifbar machen! 🎯
+**Paperoo** - Making tasks tangible! 🎯
