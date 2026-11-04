@@ -27,7 +27,7 @@ info:
     
     Aktuell gibt es kein Rate Limiting, dies kann sich in zukünftigen Versionen ändern.
     
-  version: 1.0.2
+  version: 1.0.5
   contact:
     name: Paperoo Support
     email: support@example.com
@@ -62,11 +62,11 @@ paths:
     post:
       tags:
         - Print
-      summary: Aufgabe drucken
+      summary: Dokument drucken
       description: |
-        Erstellt eine neue Aufgabe und versucht diese sofort zu drucken. 
-        Falls der Drucker offline ist, wird die Aufgabe in die Warteschlange eingereiht 
-        und automatisch gedruckt, sobald der Drucker wieder verfügbar ist.
+        Erstellt einen Druckauftrag und versucht diesen sofort zu drucken.
+        Falls der Drucker offline ist, wird der Auftrag in die Warteschlange eingereiht.
+        Der Typ wird über type gewählt; ohne oder mit unbekanntem Typ wird ein To-do gedruckt.
       operationId: printTask
       requestBody:
         required: true
@@ -74,18 +74,33 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - text
               properties:
                 text:
                   type: string
-                  description: Der zu druckende Aufgabentext
+                  description: Text, zeilenweise Listeneinträge oder QR-Inhalt; bei Bildern optional als Beschriftung
                   example: "Dokumentation fertigstellen"
-                  minLength: 1
                   maxLength: 500
+                type:
+                  type: string
+                  description: Druck-Typ (Standard und Rückfall bei unbekannten Werten ist todo)
+                  enum: [todo, list, note, quote, image, qr, receipt]
+                  default: todo
+                title:
+                  type: string
+                  description: Optionaler Titel einer Einkaufsliste
+                list_name:
+                  type: string
+                  description: Alternative Bezeichnung für title
+                author:
+                  type: string
+                  description: Optionaler Autor eines Zitats
+                image:
+                  type: string
+                  format: byte
+                  description: Base64-kodiertes Bild oder Data-URL; bei Typ image erforderlich
                 priority:
                   type: integer
-                  description: Prioritätsstufe der Aufgabe
+                  description: Prioritätsstufe des To-dos
                   minimum: 1
                   maximum: 5
                   default: 3
@@ -148,6 +163,104 @@ paths:
           $ref: '#/components/responses/Unauthorized'
         '500':
           $ref: '#/components/responses/ServerError'
+
+  /api/system/update/status:
+    get:
+      tags:
+        - Configuration
+      summary: Update-Status lesen
+      description: Browser-Endpunkt mit Websession; liefert installierte Version und letzten Update-Job.
+      operationId: getSystemUpdateStatus
+      security: []
+      responses:
+        '200':
+          description: Update-Status
+        '401':
+          description: Anmeldung erforderlich
+
+  /api/system/update/check:
+    post:
+      tags:
+        - Configuration
+      summary: GitHub-Update prüfen
+      description: Vergleicht lokale und entfernte Version sowie Commits; erfordert Websession und CSRF-Token.
+      operationId: checkSystemUpdate
+      security: []
+      parameters:
+        - name: X-CSRF-Token
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Versions- und Commit-Vergleich
+        '401':
+          description: Anmeldung erforderlich
+        '403':
+          description: CSRF-Token fehlt oder ist ungültig
+        '502':
+          description: GitHub oder Git ist nicht erreichbar
+
+  /api/system/update/install:
+    post:
+      tags:
+        - Configuration
+      summary: GitHub-Update installieren
+      description: Startet Backup und Fast-forward-Update im Hintergrund; erfordert Websession und CSRF-Token.
+      operationId: installSystemUpdate
+      security: []
+      parameters:
+        - name: X-CSRF-Token
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '202':
+          description: Update gestartet
+        '401':
+          description: Anmeldung erforderlich
+        '403':
+          description: CSRF-Token fehlt oder ist ungültig
+        '409':
+          description: Ein anderes Update läuft bereits
+
+  /api/settings/motivation:
+    post:
+      tags:
+        - Configuration
+      summary: Motivationseinstellungen speichern
+      description: Browser-Endpunkt für die Weboberfläche; erfordert eine Websession und ein CSRF-Token statt eines API-Keys.
+      operationId: updateMotivationSettings
+      security: []
+      parameters:
+        - name: X-CSRF-Token
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                provider:
+                  type: string
+                  enum: [openai, anthropic, openrouter, local]
+                enabled:
+                  type: boolean
+      responses:
+        '200':
+          description: Einstellungen gespeichert
+        '400':
+          description: Ungültige Einstellungen
+        '401':
+          description: Anmeldung erforderlich
+        '403':
+          description: CSRF-Token fehlt oder ist ungültig
 
   /api/status:
     get:
@@ -355,6 +468,10 @@ components:
             language:
               type: string
               description: Verwendete Sprache
+            type:
+              type: string
+              description: Tatsächlich verwendeter Druck-Typ
+              enum: [todo, list, note, quote, image, qr, receipt]
             queued:
               type: boolean
               description: Ob die Aufgabe in die Warteschlange eingereiht wurde
@@ -370,7 +487,7 @@ components:
             version:
               type: string
               description: Paperoo-Server-Version
-              example: 1.0.2
+              example: 1.0.5
             printer_configured:
               type: boolean
               description: Ob ein Drucker konfiguriert ist
