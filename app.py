@@ -1,47 +1,60 @@
-import os
+import atexit
+import base64
+import ipaddress
 import json
 import logging
+import os
+import re
 import subprocess
-from flask import Flask, render_template, request, jsonify, session, redirect, url_for
-from dotenv import load_dotenv
-from modules.printer_manager import PrinterManager
-from modules.mqtt_handler import MQTTHandler
-from modules.auth import AuthManager
-from modules.printer_detector import PrinterDetector
-from modules.translations import get_all_translations
-from modules.database import TodoDatabase
-from modules.print_queue import PrintQueueManager
-from modules.session_manager import SessionManager
-import atexit
 import threading
 import time
-from pathlib import Path
 from datetime import timedelta
+from io import BytesIO
+from pathlib import Path
 
-# Load environment variables
-load_dotenv()
+from dotenv import load_dotenv
+from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from PIL import Image, UnidentifiedImageError
+from werkzeug.security import generate_password_hash
 
-# Configure logging
+from modules.auth import AuthManager
+from modules.configuration import load_config
+from modules.database import TodoDatabase
+from modules.motivation_generator import MotivationGenerator
+from modules.mqtt_handler import MQTTHandler
+from modules.print_queue import PrintQueueManager
+from modules.printer_detector import PrinterDetector
+from modules.printer_manager import PrinterManager
+from modules.session_manager import SessionManager
+from modules.settings_store import (
+    SettingsError,
+    SettingsStore,
+    boolean_value,
+    integer_value,
+    text_value,
+    url_value,
+)
+from modules.translations import get_all_translations
+
+SERVER_ROOT = Path(__file__).resolve().parent
+load_dotenv(SERVER_ROOT / '.env')
+
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    force=True  # Force reconfiguration of logging
+    force=True,
 )
 logger = logging.getLogger(__name__)
-
-# Set specific log levels for modules
 logging.getLogger('modules.mqtt_handler').setLevel(logging.INFO)
 logging.getLogger('modules.printer_manager').setLevel(logging.INFO)
 
-APP_VERSION = '1.0.5'
+APP_VERSION = '1.0.7'
 PRINT_TYPES = {'todo', 'list', 'note', 'quote', 'image', 'qr', 'receipt'}
 MOTIVATION_PROVIDERS = {'openai', 'anthropic', 'openrouter', 'local'}
-SERVER_ROOT = Path(__file__).resolve().parent
 UPDATE_SCRIPT = SERVER_ROOT / 'update.sh'
 UPDATE_STATUS_PATH = SERVER_ROOT / 'logs' / 'update-status.json'
 UPDATE_LOG_PATH = SERVER_ROOT / 'logs' / 'update-manual.log'
 
-# Initialize Flask app
 app = Flask(__name__)
 secret_key = os.getenv('SECRET_KEY')
 if not secret_key:
@@ -52,171 +65,67 @@ app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 
-# Initialize components
-config = {
-    'PRINTER_TYPE': os.getenv('PRINTER_TYPE', 'usb'),
-    'PRINTER_VENDOR_ID': os.getenv('PRINTER_VENDOR_ID', '0x04b8'),
-    'PRINTER_PRODUCT_ID': os.getenv('PRINTER_PRODUCT_ID', '0x0e15'),
-    'PRINTER_SERIAL_PORT': os.getenv('PRINTER_SERIAL_PORT', '/dev/ttyUSB0'),
-    'PRINTER_NETWORK_IP': os.getenv('PRINTER_NETWORK_IP', '192.168.1.100'),
-    'PRINT_IMAGE_WIDTH': os.getenv('PRINT_IMAGE_WIDTH', '384'),
-    'MQTT_ENABLED': os.getenv('MQTT_ENABLED', 'false'),
-    'MQTT_BROKER': os.getenv('MQTT_BROKER', 'localhost'),
-    'MQTT_PORT': os.getenv('MQTT_PORT', '1883'),
-    'MQTT_USERNAME': os.getenv('MQTT_USERNAME', ''),
-    'MQTT_PASSWORD': os.getenv('MQTT_PASSWORD', ''),
-    'MQTT_TOPIC_BEFORE_PRINT': os.getenv('MQTT_TOPIC_BEFORE_PRINT', 'printer/before_print'),
-    'MQTT_PAYLOAD_BEFORE_PRINT': os.getenv('MQTT_PAYLOAD_BEFORE_PRINT', '{"action": "power_on"}'),
-    'MQTT_WAIT_SECONDS': os.getenv('MQTT_WAIT_SECONDS', '5'),
-    'MQTT_TIMEOUT_MINUTES': os.getenv('MQTT_TIMEOUT_MINUTES', '30'),
-    'MQTT_TOPIC_AFTER_TIMEOUT': os.getenv('MQTT_TOPIC_AFTER_TIMEOUT', 'printer/after_timeout'),
-    'MQTT_PAYLOAD_AFTER_TIMEOUT': os.getenv('MQTT_PAYLOAD_AFTER_TIMEOUT', '{"action": "power_off"}'),
-    'MOTIVATION_ENABLED': os.getenv('MOTIVATION_ENABLED', 'false'),
-    'MOTIVATION_PROVIDER': os.getenv('MOTIVATION_PROVIDER', 'openai'),
-    'OPENAI_API_KEY': os.getenv('OPENAI_API_KEY', ''),
-    'OPENAI_BASE_URL': os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1/chat/completions'),
-    'OPENAI_MODEL': os.getenv('OPENAI_MODEL', os.getenv('MOTIVATION_MODEL', 'gpt-4o-mini')),
-    'ANTHROPIC_API_KEY': os.getenv('ANTHROPIC_API_KEY', ''),
-    'ANTHROPIC_BASE_URL': os.getenv('ANTHROPIC_BASE_URL', 'https://api.anthropic.com/v1/messages'),
-    'ANTHROPIC_MODEL': os.getenv('ANTHROPIC_MODEL', 'claude-3-5-haiku-latest'),
-    'OPENROUTER_API_KEY': os.getenv('OPENROUTER_API_KEY', ''),
-    'OPENROUTER_BASE_URL': os.getenv('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1/chat/completions'),
-    'OPENROUTER_MODEL': os.getenv('OPENROUTER_MODEL', 'openai/gpt-4o-mini'),
-    'LOCAL_BASE_URL': os.getenv('LOCAL_BASE_URL', 'http://localhost:11434/v1/chat/completions'),
-    'LOCAL_MODEL': os.getenv('LOCAL_MODEL', 'llama3.2'),
-    'LANGUAGE': os.getenv('LANGUAGE', 'de'),
-    'WEB_AUTH_ENABLED': os.getenv('WEB_AUTH_ENABLED', 'false'),
-    'WEB_USERNAME': os.getenv('WEB_USERNAME', ''),
-    'WEB_PASSWORD': os.getenv('WEB_PASSWORD', ''),
-    'WEB_PASSWORD_HASH': os.getenv('WEB_PASSWORD_HASH', ''),
-    'WEB_SESSION_TIMEOUT': os.getenv('WEB_SESSION_TIMEOUT', '1440'),
-    'WEB_REMEMBER_ME_DAYS': os.getenv('WEB_REMEMBER_ME_DAYS', '30'),
-    'WEB_IP_WHITELIST_ENABLED': os.getenv('WEB_IP_WHITELIST_ENABLED', 'false'),
-    'WEB_IP_WHITELIST': os.getenv('WEB_IP_WHITELIST', '192.168.0.0/16,10.0.0.0/8,127.0.0.1'),
-}
-
-# Initialize managers
+config = load_config()
 printer_manager = PrinterManager(config)
 mqtt_handler = MQTTHandler(config) if config['MQTT_ENABLED'].lower() == 'true' else None
 auth_manager = AuthManager(os.getenv('API_KEY'))
-
-# Initialize database and queue manager
-todo_db = TodoDatabase('todos.db')
+todo_db = TodoDatabase(str(SERVER_ROOT / 'todos.db'))
 queue_manager = PrintQueueManager(todo_db, printer_manager, mqtt_handler)
-queue_manager.start()  # Start background queue processor
-
-# Initialize session manager
+queue_manager.start()
 session_manager = SessionManager(config, todo_db)
+settings_store = SettingsStore(SERVER_ROOT / '.env')
 
-# File watcher for .env changes
-env_file_path = Path('.env')
+env_file_path = SERVER_ROOT / '.env'
 last_mtime = 0
 watch_thread = None
 stop_watching = False
 
+
 def reload_config():
-    """Reload configuration from .env file"""
-    global config, printer_manager, mqtt_handler, auth_manager, last_mtime, queue_manager
-    
+    global config, printer_manager, mqtt_handler, auth_manager, last_mtime
     try:
-        # Reload environment variables
-        load_dotenv(override=True)
-        
-        # Update configuration
-        new_config = {
-            'PRINTER_TYPE': os.getenv('PRINTER_TYPE', 'usb'),
-            'PRINTER_VENDOR_ID': os.getenv('PRINTER_VENDOR_ID', '0x04b8'),
-            'PRINTER_PRODUCT_ID': os.getenv('PRINTER_PRODUCT_ID', '0x0e15'),
-            'PRINTER_SERIAL_PORT': os.getenv('PRINTER_SERIAL_PORT', '/dev/ttyUSB0'),
-            'PRINTER_NETWORK_IP': os.getenv('PRINTER_NETWORK_IP', '192.168.1.100'),
-            'PRINT_IMAGE_WIDTH': os.getenv('PRINT_IMAGE_WIDTH', '384'),
-            'MQTT_ENABLED': os.getenv('MQTT_ENABLED', 'false'),
-            'MQTT_BROKER': os.getenv('MQTT_BROKER', 'localhost'),
-            'MQTT_PORT': os.getenv('MQTT_PORT', '1883'),
-            'MQTT_USERNAME': os.getenv('MQTT_USERNAME', ''),
-            'MQTT_PASSWORD': os.getenv('MQTT_PASSWORD', ''),
-            'MQTT_TOPIC_BEFORE_PRINT': os.getenv('MQTT_TOPIC_BEFORE_PRINT', 'printer/before_print'),
-            'MQTT_PAYLOAD_BEFORE_PRINT': os.getenv('MQTT_PAYLOAD_BEFORE_PRINT', '{"action": "power_on"}'),
-            'MQTT_WAIT_SECONDS': os.getenv('MQTT_WAIT_SECONDS', '5'),
-            'MQTT_TIMEOUT_MINUTES': os.getenv('MQTT_TIMEOUT_MINUTES', '30'),
-            'MQTT_TOPIC_AFTER_TIMEOUT': os.getenv('MQTT_TOPIC_AFTER_TIMEOUT', 'printer/after_timeout'),
-            'MQTT_PAYLOAD_AFTER_TIMEOUT': os.getenv('MQTT_PAYLOAD_AFTER_TIMEOUT', '{"action": "power_off"}'),
-            'MOTIVATION_ENABLED': os.getenv('MOTIVATION_ENABLED', 'false'),
-            'MOTIVATION_PROVIDER': os.getenv('MOTIVATION_PROVIDER', 'openai'),
-            'OPENAI_API_KEY': os.getenv('OPENAI_API_KEY', ''),
-            'OPENAI_BASE_URL': os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1/chat/completions'),
-            'OPENAI_MODEL': os.getenv('OPENAI_MODEL', os.getenv('MOTIVATION_MODEL', 'gpt-4o-mini')),
-            'ANTHROPIC_API_KEY': os.getenv('ANTHROPIC_API_KEY', ''),
-            'ANTHROPIC_BASE_URL': os.getenv('ANTHROPIC_BASE_URL', 'https://api.anthropic.com/v1/messages'),
-            'ANTHROPIC_MODEL': os.getenv('ANTHROPIC_MODEL', 'claude-3-5-haiku-latest'),
-            'OPENROUTER_API_KEY': os.getenv('OPENROUTER_API_KEY', ''),
-            'OPENROUTER_BASE_URL': os.getenv('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1/chat/completions'),
-            'OPENROUTER_MODEL': os.getenv('OPENROUTER_MODEL', 'openai/gpt-4o-mini'),
-            'LOCAL_BASE_URL': os.getenv('LOCAL_BASE_URL', 'http://localhost:11434/v1/chat/completions'),
-            'LOCAL_MODEL': os.getenv('LOCAL_MODEL', 'llama3.2'),
-            'LANGUAGE': os.getenv('LANGUAGE', 'de'),
-        }
-        
-        # Check if config actually changed
+        load_dotenv(env_file_path, override=True)
+        new_config = load_config()
         if new_config != config:
             config.update(new_config)
-            
-            # Reinitialize managers with new config
             printer_manager = PrinterManager(config)
-            
-            # Reinitialize MQTT if needed
             old_mqtt_handler = mqtt_handler
             if config['MQTT_ENABLED'].lower() == 'true':
                 if old_mqtt_handler:
-                    logger.info("Reloading MQTT handler with new configuration...")
                     old_mqtt_handler.cleanup()
-                else:
-                    logger.info("Enabling MQTT handler...")
                 mqtt_handler = MQTTHandler(config)
             else:
                 if old_mqtt_handler:
-                    logger.info("Disabling MQTT handler...")
                     old_mqtt_handler.cleanup()
                 mqtt_handler = None
-            
-            # Update queue manager with reinitialized managers
-            if 'queue_manager' in globals():
-                queue_manager.printer_manager = printer_manager
-                queue_manager.mqtt_handler = mqtt_handler
-            
-            # Update auth manager
+            queue_manager.printer_manager = printer_manager
+            queue_manager.mqtt_handler = mqtt_handler
             auth_manager = AuthManager(os.getenv('API_KEY'))
-            
-            logger.info("Configuration reloaded from .env file")
-            
-        # Update last modification time
+            session_manager.update_config(config)
+            logger.info('Configuration reloaded from .env file')
         if env_file_path.exists():
             last_mtime = env_file_path.stat().st_mtime
-            
     except Exception as e:
-        logger.error(f"Error reloading configuration: {str(e)}")
+        logger.error(f'Error reloading configuration: {str(e)}')
+        raise
+
 
 def watch_env_file():
-    """Watch .env file for changes"""
     global last_mtime, stop_watching
-    
-    # Get initial modification time
     if env_file_path.exists():
         last_mtime = env_file_path.stat().st_mtime
-    
     while not stop_watching:
         try:
             if env_file_path.exists():
                 current_mtime = env_file_path.stat().st_mtime
                 if current_mtime != last_mtime:
-                    logger.info(".env file changed, reloading configuration...")
+                    logger.info('.env file changed, reloading configuration...')
                     reload_config()
         except Exception as e:
-            logger.error(f"Error watching .env file: {str(e)}")
-        
-        time.sleep(2)  # Check every 2 seconds
+            logger.error(f'Error watching .env file: {str(e)}')
+        time.sleep(2)
 
-# Start watching .env file in background thread
+
 watch_thread = threading.Thread(target=watch_env_file, daemon=True)
 watch_thread.start()
 
@@ -309,28 +218,219 @@ def serve_docs(filename):
 @app.route('/')
 @session_manager.require_auth
 def index():
-    """Render the main web interface"""
-    # Get current printer configuration
-    current_printer = {
-        'type': config['PRINTER_TYPE'],
-        'vendor_id': config.get('PRINTER_VENDOR_ID'),
-        'product_id': config.get('PRINTER_PRODUCT_ID'),
-        'serial_port': config.get('PRINTER_SERIAL_PORT'),
-        'network_ip': config.get('PRINTER_NETWORK_IP')
-    }
-    motivation_enabled = config.get('MOTIVATION_ENABLED', 'false').lower() == 'true'
     language = config.get('LANGUAGE', 'de')
-    translations = get_all_translations(language)
-    session_info = session_manager.get_session_info()
-    return render_template('index.html', 
-                         current_printer=current_printer, 
-                         motivation_enabled=motivation_enabled,
-                         motivation_provider=config.get('MOTIVATION_PROVIDER', 'openai'),
-                         app_version=APP_VERSION,
-                         language=language,
-                         t=translations,
-                         session_info=session_info,
-                         csrf_token=session_manager.get_csrf_token())
+    return render_template(
+        'index.html',
+        language=language,
+        t=get_all_translations(language),
+        session_info=session_manager.get_session_info(),
+        csrf_token=session_manager.get_csrf_token(),
+    )
+
+
+@app.route('/settings')
+@session_manager.require_auth
+def settings_page():
+    language = config.get('LANGUAGE', 'de')
+    return render_template(
+        'settings.html',
+        app_version=APP_VERSION,
+        language=language,
+        t=get_all_translations(language),
+        session_info=session_manager.get_session_info(),
+        csrf_token=session_manager.get_csrf_token(),
+    )
+
+
+def public_settings():
+    providers = {}
+    for provider in MOTIVATION_PROVIDERS:
+        prefix = provider.upper()
+        defaults = MotivationGenerator.DEFAULTS[provider]
+        providers[provider] = {
+            'base_url': config.get(f'{prefix}_BASE_URL', defaults['base_url']),
+            'model': config.get(f'{prefix}_MODEL', defaults['model']),
+            'api_key_configured': bool(config.get(f'{prefix}_API_KEY', '')),
+        }
+    return {
+        'auth': {
+            'enabled': session_manager.is_enabled(),
+            'username': config.get('WEB_USERNAME', ''),
+            'password_configured': bool(config.get('WEB_PASSWORD_HASH') or config.get('WEB_PASSWORD')),
+            'session_timeout': int(config.get('WEB_SESSION_TIMEOUT', 1440)),
+            'remember_me_days': int(config.get('WEB_REMEMBER_ME_DAYS', 30)),
+        },
+        'motivation': {
+            'enabled': config.get('MOTIVATION_ENABLED', 'false').lower() == 'true',
+            'provider': config.get('MOTIVATION_PROVIDER', 'openai'),
+            'providers': providers,
+        },
+        'mqtt': {
+            'enabled': config.get('MQTT_ENABLED', 'false').lower() == 'true',
+            'broker': config.get('MQTT_BROKER', ''),
+            'port': int(config.get('MQTT_PORT', 1883)),
+            'username': config.get('MQTT_USERNAME', ''),
+            'password_configured': bool(config.get('MQTT_PASSWORD')),
+            'topic_before_print': config.get('MQTT_TOPIC_BEFORE_PRINT', ''),
+            'payload_before_print': config.get('MQTT_PAYLOAD_BEFORE_PRINT', ''),
+            'wait_seconds': int(config.get('MQTT_WAIT_SECONDS', 5)),
+            'timeout_minutes': int(config.get('MQTT_TIMEOUT_MINUTES', 30)),
+            'topic_after_timeout': config.get('MQTT_TOPIC_AFTER_TIMEOUT', ''),
+            'payload_after_timeout': config.get('MQTT_PAYLOAD_AFTER_TIMEOUT', ''),
+        },
+    }
+
+
+@app.route('/api/settings', methods=['GET'])
+@session_manager.require_auth
+def api_get_settings():
+    return jsonify({'success': True, 'data': public_settings()})
+
+
+@app.route('/api/settings/auth', methods=['POST'])
+@session_manager.require_auth
+@session_manager.require_csrf
+def api_update_auth_settings():
+    try:
+        data = request.get_json(silent=True) or {}
+        enabled = data.get('enabled', session_manager.is_enabled())
+        if not isinstance(enabled, bool):
+            raise SettingsError('enabled must be a boolean')
+        username = text_value(data.get('username', config.get('WEB_USERNAME', '')), 'username', 100)
+        session_timeout = integer_value(data.get('session_timeout', 1440), 'session_timeout', 5, 10080)
+        remember_me_days = integer_value(data.get('remember_me_days', 30), 'remember_me_days', 1, 365)
+        new_password = text_value(data.get('new_password', ''), 'new_password', 500)
+        confirmation = text_value(data.get('password_confirmation', ''), 'password_confirmation', 500)
+
+        if session_manager.is_enabled():
+            current_password = text_value(data.get('current_password', ''), 'current_password', 500, required=True)
+            if not session_manager.verify_credentials(session_manager.username, current_password):
+                return jsonify({'success': False, 'error': 'Current password is incorrect'}), 403
+
+        password_hash = config.get('WEB_PASSWORD_HASH', '')
+        plaintext_password = config.get('WEB_PASSWORD', '')
+        if new_password or confirmation:
+            if len(new_password) < 12:
+                raise SettingsError('The new password must contain at least 12 characters')
+            if new_password != confirmation:
+                raise SettingsError('The password confirmation does not match')
+            password_hash = generate_password_hash(new_password)
+            plaintext_password = ''
+        if enabled and not (password_hash or plaintext_password):
+            raise SettingsError('Set a password before enabling web protection')
+
+        settings_store.update({
+            'WEB_AUTH_ENABLED': str(enabled).lower(),
+            'WEB_USERNAME': username,
+            'WEB_PASSWORD_HASH': password_hash,
+            'WEB_PASSWORD': plaintext_password,
+            'WEB_SESSION_TIMEOUT': session_timeout,
+            'WEB_REMEMBER_ME_DAYS': remember_me_days,
+        })
+        reload_config()
+        if enabled:
+            session_manager.create_session(session.get('remember_me', False))
+        return jsonify({'success': True, 'data': public_settings()['auth']})
+    except SettingsError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except OSError as e:
+        logger.error(f'Could not save authentication settings: {str(e)}')
+        return jsonify({'success': False, 'error': 'Could not save authentication settings'}), 500
+
+
+def save_motivation_settings(data):
+    provider = data.get('provider', config.get('MOTIVATION_PROVIDER', 'openai'))
+    enabled = data.get('enabled', config.get('MOTIVATION_ENABLED', 'false').lower() == 'true')
+    if provider not in MOTIVATION_PROVIDERS:
+        raise SettingsError('Invalid motivation provider')
+    enabled_value = boolean_value(enabled, 'enabled')
+    prefix = provider.upper()
+    defaults = MotivationGenerator.DEFAULTS[provider]
+    provider_data = data.get('settings') or {}
+    if not isinstance(provider_data, dict):
+        raise SettingsError('settings must be an object')
+    base_url = url_value(provider_data.get('base_url', config.get(f'{prefix}_BASE_URL', defaults['base_url'])), 'base_url')
+    model = text_value(provider_data.get('model', config.get(f'{prefix}_MODEL', defaults['model'])), 'model', 200, required=True)
+    api_key = text_value(provider_data.get('api_key', ''), 'api_key', 4096)
+    clear_api_key = provider_data.get('clear_api_key', False)
+    if not isinstance(clear_api_key, bool):
+        raise SettingsError('clear_api_key must be a boolean')
+    if api_key and clear_api_key:
+        raise SettingsError('An API key cannot be entered and cleared at the same time')
+    if not api_key:
+        api_key = '' if clear_api_key else config.get(f'{prefix}_API_KEY', '')
+    if enabled and provider != 'local' and not api_key:
+        raise SettingsError('An API key is required for the selected provider')
+
+    settings_store.update({
+        'MOTIVATION_PROVIDER': provider,
+        'MOTIVATION_ENABLED': enabled_value,
+        f'{prefix}_BASE_URL': base_url,
+        f'{prefix}_MODEL': model,
+        f'{prefix}_API_KEY': api_key,
+    })
+    reload_config()
+
+
+@app.route('/api/settings/motivation', methods=['POST'])
+@session_manager.require_auth
+@session_manager.require_csrf
+def api_update_motivation():
+    try:
+        save_motivation_settings(request.get_json(silent=True) or {})
+        return jsonify({'success': True, 'data': public_settings()['motivation']})
+    except SettingsError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except OSError as e:
+        logger.error(f'Could not save motivation settings: {str(e)}')
+        return jsonify({'success': False, 'error': 'Could not save motivation settings'}), 500
+
+
+@app.route('/api/settings/mqtt', methods=['POST'])
+@session_manager.require_auth
+@session_manager.require_csrf
+def api_update_mqtt_settings():
+    try:
+        data = request.get_json(silent=True) or {}
+        enabled = boolean_value(data.get('enabled', False), 'enabled')
+        broker = text_value(data.get('broker', ''), 'broker', 255, required=enabled == 'true')
+        username = text_value(data.get('username', ''), 'username', 255)
+        password = text_value(data.get('password', ''), 'password', 4096)
+        clear_password = data.get('clear_password', False)
+        if not isinstance(clear_password, bool):
+            raise SettingsError('clear_password must be a boolean')
+        if password and clear_password:
+            raise SettingsError('A password cannot be entered and cleared at the same time')
+        if not password:
+            password = '' if clear_password else config.get('MQTT_PASSWORD', '')
+        payload_before = text_value(data.get('payload_before_print', ''), 'payload_before_print', 4096)
+        payload_after = text_value(data.get('payload_after_timeout', ''), 'payload_after_timeout', 4096)
+        for payload in (payload_before, payload_after):
+            if payload:
+                try:
+                    json.loads(payload)
+                except ValueError:
+                    raise SettingsError('MQTT payloads must contain valid JSON') from None
+        settings_store.update({
+            'MQTT_ENABLED': enabled,
+            'MQTT_BROKER': broker,
+            'MQTT_PORT': integer_value(data.get('port', 1883), 'port', 1, 65535),
+            'MQTT_USERNAME': username,
+            'MQTT_PASSWORD': password,
+            'MQTT_TOPIC_BEFORE_PRINT': text_value(data.get('topic_before_print', ''), 'topic_before_print', 500, required=enabled == 'true'),
+            'MQTT_PAYLOAD_BEFORE_PRINT': payload_before,
+            'MQTT_WAIT_SECONDS': integer_value(data.get('wait_seconds', 5), 'wait_seconds', 0, 300),
+            'MQTT_TIMEOUT_MINUTES': integer_value(data.get('timeout_minutes', 30), 'timeout_minutes', 1, 1440),
+            'MQTT_TOPIC_AFTER_TIMEOUT': text_value(data.get('topic_after_timeout', ''), 'topic_after_timeout', 500, required=enabled == 'true'),
+            'MQTT_PAYLOAD_AFTER_TIMEOUT': payload_after,
+        })
+        reload_config()
+        return jsonify({'success': True, 'data': public_settings()['mqtt']})
+    except SettingsError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except OSError as e:
+        logger.error(f'Could not save MQTT settings: {str(e)}')
+        return jsonify({'success': False, 'error': 'Could not save MQTT settings'}), 500
 
 @app.route('/health')
 def health():
@@ -344,6 +444,8 @@ def health():
     })
 
 @app.route('/api/reload-config', methods=['POST'])
+@session_manager.require_auth
+@session_manager.require_csrf
 def api_reload_config():
     """Manually reload configuration from .env file"""
     try:
@@ -425,6 +527,12 @@ def api_print_todo():
             metadata['author'] = author.strip()
         if print_type == 'image':
             metadata['image'] = image_data
+        elif print_type == 'qr':
+            try:
+                qr_size = int(data.get('qr_size', 8))
+            except (TypeError, ValueError):
+                qr_size = 8
+            metadata['qr_size'] = min(16, max(1, qr_size))
 
         success, message, todo_id = queue_manager.add_todo(text, priority, metadata)
         response_data = {
@@ -434,6 +542,8 @@ def api_print_todo():
             'language': language,
             'type': print_type
         }
+        if print_type == 'qr':
+            response_data['qr_size'] = metadata['qr_size']
 
         if success:
             logger.info(f"{print_type} printed successfully")
@@ -508,160 +618,69 @@ def api_get_printers():
 
 @app.route('/api/printers/select', methods=['POST'])
 @session_manager.require_auth
-def api_select_printer():
-    """Select and save a printer configuration"""
-    try:
-        data = request.get_json()
-        
-        if not data:
-            return jsonify({
-                'success': False,
-                'error': 'No data provided'
-            }), 400
-        
-        printer_type = data.get('type')
-        printer_config = {'type': printer_type}
-        
-        # Validate and prepare configuration based on type
-        if printer_type == 'usb':
-            if not data.get('vendor_id') or not data.get('product_id'):
-                return jsonify({
-                    'success': False,
-                    'error': 'USB printer requires vendor_id and product_id'
-                }), 400
-            printer_config['vendor_id'] = data['vendor_id']
-            printer_config['product_id'] = data['product_id']
-            
-        elif printer_type == 'serial':
-            if not data.get('port'):
-                return jsonify({
-                    'success': False,
-                    'error': 'Serial printer requires port'
-                }), 400
-            printer_config['port'] = data['port']
-            
-        elif printer_type == 'network':
-            if not data.get('ip'):
-                return jsonify({
-                    'success': False,
-                    'error': 'Network printer requires IP address'
-                }), 400
-            printer_config['ip'] = data['ip']
-        else:
-            return jsonify({
-                'success': False,
-                'error': f'Invalid printer type: {printer_type}'
-            }), 400
-        
-        # Save configuration to .env
-        if PrinterDetector.save_printer_config(printer_config):
-            # Update current configuration
-            load_dotenv(override=True)  # Reload .env
-            
-            # Update config dict
-            config['PRINTER_TYPE'] = printer_type
-            if printer_type == 'usb':
-                config['PRINTER_VENDOR_ID'] = printer_config['vendor_id']
-                config['PRINTER_PRODUCT_ID'] = printer_config['product_id']
-            elif printer_type == 'serial':
-                config['PRINTER_SERIAL_PORT'] = printer_config['port']
-            elif printer_type == 'network':
-                config['PRINTER_NETWORK_IP'] = printer_config['ip']
-            
-            # Reinitialize printer manager with new config
-            global printer_manager
-            printer_manager = PrinterManager(config)
-            
-            return jsonify({
-                'success': True,
-                'message': 'Printer configuration saved successfully',
-                'data': printer_config
-            })
-        else:
-            return jsonify({
-                'success': False,
-                'error': 'Failed to save configuration'
-            }), 500
-            
-    except Exception as e:
-        logger.error(f"Error selecting printer: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': 'Failed to select printer',
-            'message': str(e)
-        }), 500
-
-# Web form submission (protected by session auth)
-@app.route('/api/settings/language', methods=['POST'])
-@session_manager.require_auth
-def api_update_language():
-    """Update language settings"""
-    try:
-        data = request.get_json()
-        language = data.get('language', 'de')
-        
-        if language not in ['de', 'en']:
-            language = 'de'
-        
-        # Update config
-        config['LANGUAGE'] = language
-        
-        # Reinitialize printer manager with new language
-        global printer_manager
-        printer_manager = PrinterManager(config)
-        
-        logger.info(f"Language setting updated: {language}")
-        
-        return jsonify({
-            'success': True,
-            'message': f'Language set to {language}',
-            'translations': get_all_translations(language)
-        })
-    except Exception as e:
-        logger.error(f"Error updating language settings: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
-
-@app.route('/api/settings/motivation', methods=['POST'])
-@session_manager.require_auth
 @session_manager.require_csrf
-def api_update_motivation():
-    """Update the motivation provider and its enabled state"""
-    global printer_manager
+def api_select_printer():
     try:
         data = request.get_json(silent=True) or {}
-        provider = data.get('provider', config.get('MOTIVATION_PROVIDER', 'openai'))
-        enabled = data.get('enabled', config.get('MOTIVATION_ENABLED', 'false').lower() == 'true')
-        if provider not in MOTIVATION_PROVIDERS or not isinstance(enabled, bool):
-            return jsonify({
-                'success': False,
-                'error': 'Invalid motivation settings'
-            }), 400
+        printer_type = data.get('type')
+        values = {'PRINTER_TYPE': printer_type}
+        printer_config = {'type': printer_type}
+        if printer_type == 'usb':
+            for field, key in (('vendor_id', 'PRINTER_VENDOR_ID'), ('product_id', 'PRINTER_PRODUCT_ID')):
+                identifier = text_value(data.get(field, ''), field, 6, required=True).lower()
+                if not re.fullmatch(r'(?:0x)?[0-9a-f]{4}', identifier):
+                    raise SettingsError(f'{field} must be a four-digit hexadecimal USB ID')
+                if not identifier.startswith('0x'):
+                    identifier = f'0x{identifier}'
+                values[key] = identifier
+                printer_config[field] = identifier
+        elif printer_type == 'serial':
+            port = text_value(data.get('port', ''), 'port', 500, required=True)
+            if not port.startswith('/dev/'):
+                raise SettingsError('The serial port must be a /dev/ path')
+            values['PRINTER_SERIAL_PORT'] = port
+            printer_config['port'] = port
+        elif printer_type == 'network':
+            address = text_value(data.get('ip', ''), 'ip', 255, required=True)
+            try:
+                ipaddress.ip_address(address)
+            except ValueError:
+                raise SettingsError('Enter a valid IPv4 or IPv6 address') from None
+            values['PRINTER_NETWORK_IP'] = address
+            printer_config['ip'] = address
+        else:
+            raise SettingsError('Invalid printer type')
 
-        from dotenv import set_key
-        set_key('.env', 'MOTIVATION_PROVIDER', provider)
-        set_key('.env', 'MOTIVATION_ENABLED', str(enabled).lower())
-        config['MOTIVATION_PROVIDER'] = provider
-        config['MOTIVATION_ENABLED'] = str(enabled).lower()
-        printer_manager = PrinterManager(config)
-        queue_manager.printer_manager = printer_manager
+        settings_store.update(values)
+        reload_config()
+        return jsonify({'success': True, 'data': printer_config})
+    except SettingsError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except OSError as e:
+        logger.error(f'Could not save printer configuration: {str(e)}')
+        return jsonify({'success': False, 'error': 'Could not save printer configuration'}), 500
 
+
+@app.route('/api/settings/language', methods=['POST'])
+@session_manager.require_auth
+@session_manager.require_csrf
+def api_update_language():
+    try:
+        data = request.get_json(silent=True) or {}
+        language = data.get('language', 'de')
+        if language not in ['de', 'en']:
+            raise SettingsError('Invalid language')
+        settings_store.update({'LANGUAGE': language})
+        reload_config()
         return jsonify({
             'success': True,
-            'data': {
-                'provider': provider,
-                'enabled': enabled,
-                'generator_enabled': printer_manager.motivation_generator.is_enabled() if printer_manager.motivation_generator else False
-            }
+            'translations': get_all_translations(language),
         })
-    except Exception as e:
-        logger.error(f"Error updating motivation settings: {str(e)}")
-        return jsonify({
-            'success': False,
-            'error': str(e)
-        }), 500
+    except SettingsError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except OSError as e:
+        logger.error(f'Could not save language: {str(e)}')
+        return jsonify({'success': False, 'error': 'Could not save language'}), 500
 
 def read_update_status():
     if not UPDATE_STATUS_PATH.exists():
@@ -737,41 +756,74 @@ def api_system_update_install():
 @session_manager.require_auth
 @session_manager.require_csrf
 def web_print_todo():
-    """Handle web form submission to print ToDo"""
     try:
+        print_type = request.form.get('type', 'todo').strip().lower()
+        if print_type not in PRINT_TYPES:
+            return jsonify({'success': False, 'error': 'Invalid print type'}), 400
         text = request.form.get('text', '').strip()
-        priority = request.form.get('priority', 3)
-        
-        if not text:
-            return jsonify({
-                'success': False,
-                'message': 'Please enter ToDo text'
-            }), 400
-        
-        # Validate priority
+        if len(text) > 500:
+            return jsonify({'success': False, 'error': 'Text must not exceed 500 characters'}), 400
+        if print_type != 'image' and not text:
+            return jsonify({'success': False, 'error': 'Text is required'}), 400
+
         try:
-            priority = int(priority)
+            priority = int(request.form.get('priority', 3))
             if priority < 1 or priority > 5:
                 priority = 3
-        except:
+        except (TypeError, ValueError):
             priority = 3
-        
-        # Add to queue and attempt to print
-        success, message, todo_id = queue_manager.add_todo(text, priority, {'source': 'web'})
-        
-        return jsonify({
-            'success': True,  # Always return success if saved
+
+        metadata = {
+            'source': 'web',
+            'language': config.get('LANGUAGE', 'de'),
+            'type': print_type,
+        }
+        if print_type == 'list':
+            title = request.form.get('title', '').strip()
+            if len(title) > 200:
+                return jsonify({'success': False, 'error': 'List title must not exceed 200 characters'}), 400
+            if title:
+                metadata['title'] = title
+        elif print_type == 'quote':
+            author = request.form.get('author', '').strip()
+            if len(author) > 200:
+                return jsonify({'success': False, 'error': 'Author must not exceed 200 characters'}), 400
+            if author:
+                metadata['author'] = author
+        elif print_type == 'image':
+            image_file = request.files.get('image')
+            if not image_file or not image_file.filename:
+                return jsonify({'success': False, 'error': 'An image file is required'}), 400
+            image_bytes = image_file.read(10 * 1024 * 1024 + 1)
+            if len(image_bytes) > 10 * 1024 * 1024:
+                return jsonify({'success': False, 'error': 'Image file must not exceed 10 MB'}), 400
+            try:
+                with Image.open(BytesIO(image_bytes)) as image:
+                    image.verify()
+            except (UnidentifiedImageError, OSError, Image.DecompressionBombError):
+                return jsonify({'success': False, 'error': 'The selected file is not a valid image'}), 400
+            metadata['image'] = base64.b64encode(image_bytes).decode('ascii')
+        elif print_type == 'qr':
+            try:
+                qr_size = int(request.form.get('qr_size', 8))
+            except (TypeError, ValueError):
+                qr_size = 8
+            metadata['qr_size'] = min(16, max(1, qr_size))
+
+        success, message, todo_id = queue_manager.add_todo(text, priority, metadata)
+        response_data = {
+            'success': True,
             'message': message,
             'todo_id': todo_id,
-            'queued': not success  # Indicate if it was queued for retry
-        }), 200
-        
+            'type': print_type,
+            'queued': not success,
+        }
+        if print_type == 'qr':
+            response_data['qr_size'] = metadata['qr_size']
+        return jsonify(response_data), 200
     except Exception as e:
-        logger.error(f"Web print error: {str(e)}")
-        return jsonify({
-            'success': False,
-            'message': str(e)
-        }), 500
+        logger.error(f'Web print error: {str(e)}')
+        return jsonify({'success': False, 'error': 'Could not process print job'}), 500
 
 # Queue management endpoints
 @app.route('/api/queue/status', methods=['GET'])

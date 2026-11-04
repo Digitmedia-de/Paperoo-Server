@@ -235,8 +235,12 @@ Starts retry attempt for all failed tasks.
 
 ### Features
 
+- **Seven print types:** to-do, shopping/reminder list, note, quote, image upload, QR code and task receipt
+- **Type-specific fields** for list titles, quote authors and image captions (images up to 10 MB)
+- **Grouped lists:** start a heading with `# Heading`, followed by one item per line; unchecked items print as `[ ]`
+- **Adjustable QR codes:** choose module size 1–16 per print (default: 8), preserved for queue retries
 - **Task input** with character counter (max. 500)
-- **Priority selection** with visual stars (1-5)
+- **Priority selection** with visual stars (1-5) for to-dos
 - **Live printer status** and connection display
 - **Queue monitoring** inline in header
 - **Language switching** (DE/EN) with instant effect
@@ -251,6 +255,18 @@ With authentication:
 1. Login at `/login`
 2. Session stays active for 24 hours (configurable)
 3. "Remember Me" option for 30 days
+
+## ⚙️ Web Settings
+
+Open `http://localhost:5001/settings` or use **Settings** in the header. The separate settings page provides:
+
+- **Access and security:** enable password protection, set the optional username, change the password and configure session durations. Changing settings while protection is active requires the current password. New passwords are stored only as a Werkzeug hash.
+- **Printer:** detect and select USB or serial printers and configure a network printer.
+- **Motivational quotes:** enable OpenAI, Anthropic, OpenRouter or a local OpenAI-compatible LLM and configure its model, base URL and API key.
+- **MQTT:** configure broker credentials, topics, JSON payloads and power timing.
+- **System update:** check GitHub and install updates.
+
+Saved values take effect without a manual restart. API and MQTT secrets are never returned to the browser. Leaving a secret field blank keeps its current value; the corresponding delete checkbox clears it. Configuration updates are written atomically to `.env` and require write permission for the service user.
 
 ## ⬆️ System Updates
 

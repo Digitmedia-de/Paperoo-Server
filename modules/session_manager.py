@@ -30,7 +30,19 @@ class SessionManager:
 
         if self.enabled and self.password and not self.password_hash:
             logger.warning("WEB_PASSWORD uses plaintext comparison; configure WEB_PASSWORD_HASH instead")
-    
+
+    def update_config(self, config):
+        self.enabled = config.get('WEB_AUTH_ENABLED', 'false').lower() == 'true'
+        self.username = config.get('WEB_USERNAME', '').strip()
+        self.password = config.get('WEB_PASSWORD', '')
+        self.password_hash = config.get('WEB_PASSWORD_HASH', '').strip()
+        self.session_timeout = int(config.get('WEB_SESSION_TIMEOUT', 1440))
+        self.remember_me_days = int(config.get('WEB_REMEMBER_ME_DAYS', 30))
+        self.ip_whitelist_enabled = config.get('WEB_IP_WHITELIST_ENABLED', 'false').lower() == 'true'
+        self.allowed_networks = self._parse_ip_whitelist(
+            config.get('WEB_IP_WHITELIST', '192.168.0.0/16,10.0.0.0/8,127.0.0.1')
+        )
+
     def _parse_ip_whitelist(self, whitelist_str):
         """Parse IP whitelist from comma-separated string"""
         import ipaddress

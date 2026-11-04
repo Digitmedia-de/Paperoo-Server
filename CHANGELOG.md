@@ -5,6 +5,17 @@ Versionierung: nur die letzte Stelle wird erhöht (z. B. 1.0.1 → 1.0.2), auße
 
 ## [Unveröffentlicht]
 
+### Einstellungen und Druckoberfläche (Version 1.0.7)
+- Neuer separater Bereich `/settings` für Zugangsschutz, Drucker, KI-Anbieter, MQTT und Systemupdates; die Druckseite konzentriert sich auf Aufgaben und Warteschlange.
+- Die Druckseite bietet alle sieben Druckarten: To-do, Einkaufs-/Erinnerungsliste, Notiz, Zitat, Bild, QR-Code und Aufgabenquittung. Zusatzfelder und Priorität passen sich dem Typ an; Bilder können bis 10 MB hochgeladen werden.
+- Listen akzeptieren Gruppenüberschriften mit `# Überschrift`; Einträge werden linksbündig mit `[ ]` und eingerückten Folgezeilen gedruckt. Der internationale Standardzeichensatz verhindert, dass eckige Klammern auf deutsch konfigurierten Druckern als Umlaute erscheinen.
+- QR-Codes verwenden standardmäßig Modulgröße 8 statt 3 und können in der Weboberfläche sowie mit `qr_size` in Stufen von 1 bis 16 angepasst werden. Die Größe bleibt bei Warteschlangen-Wiederholungen erhalten.
+- Benutzername, Passwortschutz, Passwort und Sitzungszeiten können in der Weboberfläche geändert werden. Neue Passwörter werden ausschließlich als Hash gespeichert; bei aktivem Schutz ist das aktuelle Passwort erforderlich.
+- OpenAI, Anthropic, OpenRouter und lokale LLMs lassen sich inklusive Modell, Basis-URL und API-Schlüssel konfigurieren. MQTT-Zugang und Nachrichten sind ebenfalls editierbar.
+- Geheimnisse werden nicht über die Einstellungs-API ausgegeben. Änderungen an `.env` erfolgen atomar und werden ohne manuellen Neustart übernommen.
+- Schreibende Einstellungs- und Drucker-Endpunkte verwenden Websession und CSRF-Schutz; die Sprachwahl wird dauerhaft gespeichert.
+- Leere Zugangswerte in `.env.example` stehen ohne Inline-Kommentare; bekannte Kommentar-Platzhalter aus bestehenden Installationen werden nicht mehr als Zugangsdaten interpretiert.
+
 ### Dokumentation
 - `README.md`: Installationsbefehl zeigt auf das korrekte Repository `Digitmedia-de/Paperoo-Server`.
 - `README.md`: Installationspfad ist jetzt `/opt/Paperoo-Server` (bisher `/opt/paperoo`), auch in der systemd-Unit. Grund: Auf dem Gerät liegt der Ordner unter diesem Namen.

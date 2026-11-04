@@ -2,6 +2,7 @@ import os
 import time
 import threading
 import base64
+import textwrap
 from datetime import datetime, timedelta
 from io import BytesIO
 from PIL import Image
@@ -232,7 +233,7 @@ class PrinterManager:
         elif print_type == 'image':
             self._format_image(text, metadata)
         elif print_type == 'qr':
-            self._format_qr(text)
+            self._format_qr(text, metadata)
         elif print_type == 'receipt':
             self._format_receipt(text, language)
         else:
@@ -241,6 +242,10 @@ class PrinterManager:
     def _start_receipt(self):
         try:
             self.printer.charcode('CP858')
+        except Exception:
+            pass
+        try:
+            self.printer._raw(b'\x1bR\x00')
         except Exception:
             pass
         self.printer.text("\n")
@@ -258,8 +263,15 @@ class PrinterManager:
 
     def _print_items(self, items, marker):
         self.printer.set(align='left', font='a', width=1, height=1, bold=False)
+        continuation_indent = ' ' * (len(marker) + 1)
         for item in items:
-            for line in self._wrap_text_centered(f"{marker} {item}", 32):
+            lines = textwrap.wrap(
+                f"{marker} {item}",
+                width=32,
+                subsequent_indent=continuation_indent,
+                break_on_hyphens=False,
+            )
+            for line in lines:
                 self.printer.text(line + "\n")
             self.printer.text("\n")
 
@@ -268,8 +280,30 @@ class PrinterManager:
         self._start_receipt()
         title = metadata.get('title') or get_translation(lang, 'receipt_list_title', 'Shopping List')
         self._print_title(title)
-        items = [line.strip() for line in text.splitlines() if line.strip()]
-        self._print_items(items, '[ ]')
+        groups = []
+        heading = None
+        items = []
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            if line.startswith('#') and len(line) > 1 and line[1].isspace():
+                if heading is not None or items:
+                    groups.append((heading, items))
+                heading = line[1:].strip()
+                items = []
+            else:
+                items.append(line)
+        if heading is not None or items:
+            groups.append((heading, items))
+
+        for group_heading, group_items in groups:
+            if group_heading:
+                self.printer.set(align='left', font='a', width=1, height=1, bold=True)
+                for line in textwrap.wrap(group_heading, width=32, break_on_hyphens=False):
+                    self.printer.text(line + "\n")
+                self.printer.text("-" * 32 + "\n")
+            self._print_items(group_items, '[ ]')
         self._finish_receipt()
 
     def _format_note(self, text, language):
@@ -329,10 +363,15 @@ class PrinterManager:
             self.printer.image(image)
         self._finish_receipt()
 
-    def _format_qr(self, text):
+    def _format_qr(self, text, metadata):
+        try:
+            size = int(metadata.get('qr_size', 8))
+        except (TypeError, ValueError):
+            size = 8
+        size = min(16, max(1, size))
         self._start_receipt()
         self.printer.set(align='center')
-        self.printer.qr(text)
+        self.printer.qr(text, size=size, center=True)
         self._finish_receipt()
 
     def _format_and_print(self, text, priority, language=None):

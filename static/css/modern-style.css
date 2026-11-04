@@ -810,6 +810,107 @@ textarea.form-control {
     display: block;
 }
 
+.print-type-selector {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+    gap: 10px;
+}
+
+.print-type-option {
+    min-height: 104px;
+    padding: 14px 10px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    background: var(--white);
+    color: var(--muted);
+    cursor: pointer;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.2s ease, background 0.2s ease;
+}
+
+.print-type-option:hover {
+    border-color: rgba(93, 135, 255, 0.55);
+    box-shadow: 0 6px 16px rgba(42, 53, 71, 0.08);
+    transform: translateY(-2px);
+}
+
+.print-type-option:focus-visible {
+    outline: 3px solid rgba(93, 135, 255, 0.25);
+    outline-offset: 2px;
+}
+
+.print-type-option.active {
+    border-color: var(--primary);
+    background: linear-gradient(145deg, rgba(93, 135, 255, 0.1), rgba(73, 190, 255, 0.04));
+    color: var(--primary);
+    box-shadow: 0 5px 16px rgba(93, 135, 255, 0.14);
+}
+
+.print-type-icon {
+    width: 40px;
+    height: 40px;
+    padding: 9px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 11px;
+    background: var(--light);
+    color: var(--dark);
+    transition: background 0.2s ease, color 0.2s ease;
+}
+
+.print-type-option.active .print-type-icon {
+    background: var(--primary);
+    color: var(--white);
+}
+
+.print-type-icon svg {
+    width: 24px;
+    height: 24px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+}
+
+.print-type-name {
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 1.35;
+    text-align: center;
+}
+
+.print-type-option.active .print-type-name {
+    color: var(--dark);
+}
+
+@media (max-width: 480px) {
+    .print-type-selector {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .print-type-option {
+        min-height: 96px;
+        padding: 12px 8px;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .print-type-option,
+    .print-type-icon {
+        transition: none;
+    }
+
+    .print-type-option:hover {
+        transform: none;
+    }
+}
+
 /* Print Animation */
 .print-animation {
     position: fixed;
