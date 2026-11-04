@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="{{ language }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token }}">
+    <title>{{ t.settings }} - {{ t.app_title }}</title>
+    <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='icons/favicon.ico') }}">
+    <link href="{{ url_for('static', filename='css/bootstrap.min.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/fonts.css') }}" rel="stylesheet">
+    <link href="{{ url_for('static', filename='css/modern-style.css') }}" rel="stylesheet">
+    <style>
+        .settings-layout { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 1.5rem; max-width: 1200px; margin: 0 auto; }
+        .settings-nav { position: sticky; top: 1rem; align-self: start; }
+        .settings-nav a { display: block; padding: .75rem 1rem; color: var(--dark); text-decoration: none; border-radius: 8px; }
+        .settings-nav a:hover { background: var(--light); color: var(--primary); }
+        .settings-section { scroll-margin-top: 1rem; margin-bottom: 1.5rem; }
+        .settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 1rem; }
+        .settings-wide { grid-column: 1 / -1; }
+        .secret-status { min-height: 1.5rem; }
+        button.printer-item { width: 100%; color: inherit; text-align: left; }
+        .printer-info > strong, .printer-info > span { display: block; }
+        .version-footer { text-align: center; color: var(--muted); margin: 2rem 0; }
+        @media (max-width: 800px) { .settings-layout, .settings-grid { grid-template-columns: 1fr; } .settings-nav { position: static; display: flex; flex-wrap: wrap; } .settings-nav a { padding: .5rem; } }
+    </style>
+</head>
+<body>
+<div class="app-wrapper">
+    <header class="app-header">
+        <div class="header-content">
+            <a href="/" class="brand">
+                <img src="{{ url_for('static', filename='icons/logo-small.png') }}" alt="Paperoo" class="brand-logo">
+                <div class="brand-text">{{ t.app_title }}</div>
+            </a>
+            <div class="header-actions">
+                <div class="language-selector">
+                    <button class="lang-btn {{ 'active' if language == 'de' else '' }}" data-lang="de" title="Deutsch">DE</button>
+                    <button class="lang-btn {{ 'active' if language == 'en' else '' }}" data-lang="en" title="English">EN</button>
+                </div>
+                <a href="/" class="btn btn-sm btn-light">{{ t.back_to_tasks }}</a>
+                {% if session_info %}<a href="/logout" class="btn btn-sm btn-light">{{ t.logout }}</a>{% endif %}
+            </div>
+        </div>
+    </header>
+
+    <main class="app-content">
+        <div class="mb-4">
+            <h2>{{ t.settings }}</h2>
+            <p class="text-muted">{{ t.settings_subtitle }}</p>
+        </div>
+        <div id="alertContainer" aria-live="polite"></div>
+        <div class="settings-layout">
+            <nav class="settings-nav card" aria-label="{{ t.settings }}">
+                <a href="#access">{{ t.access_security }}</a>
+                <a href="#printer">{{ t.printer_config }}</a>
+                <a href="#motivation">{{ t.motivation_settings }}</a>
+                <a href="#mqtt">{{ t.mqtt_settings }}</a>
+                <a href="#update">{{ t.system_update }}</a>
+            </nav>
+            <div>
+                <section id="access" class="settings-section card">
+                    <div class="card-header">
+                        <h3 class="card-title">{{ t.access_security }}</h3>
+                        <p class="card-subtitle">{{ t.access_security_subtitle }}</p>
+                    </div>
+                    <div class="card-body">
+                        <form id="authForm">
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="authEnabled">
+                                <label class="form-check-label" for="authEnabled">{{ t.protect_web }}</label>
+                            </div>
+                            <div class="form-group">
+                                <label for="webUsername" class="form-label">{{ t.username }}</label>
+                                <input type="text" class="form-control" id="webUsername" maxlength="100" autocomplete="username">
+                            </div>
+                            <p id="webPasswordStatus" class="text-muted secret-status"></p>
+                            <div class="form-group" id="currentPasswordGroup">
+                                <label for="currentPassword" class="form-label">{{ t.current_password }}</label>
+                                <input type="password" class="form-control" id="currentPassword" autocomplete="current-password">
+                                <small class="text-muted">{{ t.current_password_hint }}</small>
+                            </div>
+                            <div class="settings-grid">
+                                <div class="form-group">
+                                    <label for="newPassword" class="form-label">{{ t.new_password }}</label>
+                                    <input type="password" class="form-control" id="newPassword" minlength="12" autocomplete="new-password">
+                                </div>
+                                <div class="form-group">
+                                    <label for="passwordConfirmation" class="form-label">{{ t.password_confirmation }}</label>
+                                    <input type="password" class="form-control" id="passwordConfirmation" minlength="12" autocomplete="new-password">
+                                </div>
+                            </div>
+                            <small class="d-block mb-3 text-muted">{{ t.password_rules }}</small>
+                            <div class="settings-grid">
+                                <div class="form-group">
+                                    <label for="sessionTimeout" class="form-label">{{ t.session_timeout_minutes }}</label>
+                                    <input type="number" class="form-control" id="sessionTimeout" min="5" max="10080" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="rememberDays" class="form-label">{{ t.remember_days }}</label>
+                                    <input type="number" class="form-control" id="rememberDays" min="1" max="365" required>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">{{ t.save_access }}</button>
+                        </form>
+                    </div>
+                </section>
+
+                <section id="printer" class="settings-section card">
+                    <div class="card-header">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <h3 class="card-title">{{ t.printer_config }}</h3>
+                            <button type="button" class="btn btn-sm btn-light" id="refreshPrintersBtn">{{ t.refresh }}</button>
+                        </div>
+                    </div>
+                    <div class="card-body"><div id="printerSelection" class="printer-list"></div></div>
+                </section>
+
+                <section id="motivation" class="settings-section card">
+                    <div class="card-header">
+                        <h3 class="card-title">{{ t.motivation_settings }}</h3>
+                        <p class="card-subtitle">{{ t.motivation_subtitle }}</p>
+                    </div>
+                    <div class="card-body">
+                        <form id="motivationForm">
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="motivationEnabled">
+                                <label class="form-check-label" for="motivationEnabled">{{ t.enable_motivation }}</label>
+                            </div>
+                            <div class="form-group">
+                                <label for="motivationProvider" class="form-label">{{ t.motivation_provider }}</label>
+                                <select class="form-control" id="motivationProvider">
+                                    <option value="openai">OpenAI</option>
+                                    <option value="anthropic">Anthropic</option>
+                                    <option value="openrouter">OpenRouter</option>
+                                    <option value="local">{{ t.motivation_local }}</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="providerBaseUrl" class="form-label">{{ t.base_url }}</label>
+                                <input type="url" class="form-control" id="providerBaseUrl" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="providerModel" class="form-label">{{ t.model }}</label>
+                                <input type="text" class="form-control" id="providerModel" maxlength="200" required>
+                            </div>
+                            <div id="apiKeyFields">
+                                <div class="form-group">
+                                    <label for="providerApiKey" class="form-label">{{ t.provider_api_key }}</label>
+                                    <input type="password" class="form-control" id="providerApiKey" autocomplete="off">
+                                    <small id="apiKeyStatus" class="d-block text-muted"></small>
+                                    <small class="text-muted">{{ t.api_key_replace_hint }}</small>
+                                </div>
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="clearProviderApiKey">
+                                    <label class="form-check-label" for="clearProviderApiKey">{{ t.clear_api_key }}</label>
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">{{ t.save_settings }}</button>
+                        </form>
+                    </div>
+                </section>
+
+                <section id="mqtt" class="settings-section card">
+                    <div class="card-header">
+                        <h3 class="card-title">{{ t.mqtt_settings }}</h3>
+                        <p class="card-subtitle">{{ t.mqtt_subtitle }}</p>
+                    </div>
+                    <div class="card-body">
+                        <form id="mqttForm">
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="mqttEnabled">
+                                <label class="form-check-label" for="mqttEnabled">{{ t.mqtt_enable }}</label>
+                            </div>
+                            <div class="settings-grid">
+                                <div class="form-group">
+                                    <label for="mqttBroker" class="form-label">{{ t.mqtt_broker }}</label>
+                                    <input type="text" class="form-control" id="mqttBroker" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="mqttPort" class="form-label">Port</label>
+                                    <input type="number" class="form-control" id="mqttPort" min="1" max="65535" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="mqttUsername" class="form-label">{{ t.username }}</label>
+                                    <input type="text" class="form-control" id="mqttUsername" autocomplete="off">
+                                </div>
+                                <div class="form-group">
+                                    <label for="mqttPassword" class="form-label">{{ t.mqtt_password }}</label>
+                                    <input type="password" class="form-control" id="mqttPassword" autocomplete="new-password">
+                                    <small id="mqttPasswordStatus" class="d-block text-muted"></small>
+                                    <small class="text-muted">{{ t.password_keep_hint }}</small>
+                                </div>
+                            </div>
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="clearMqttPassword">
+                                <label class="form-check-label" for="clearMqttPassword">{{ t.clear_password }}</label>
+                            </div>
+                            <div class="settings-grid">
+                                <div class="form-group">
+                                    <label for="mqttTopicBefore" class="form-label">{{ t.topic_before }}</label>
+                                    <input type="text" class="form-control" id="mqttTopicBefore" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="mqttPayloadBefore" class="form-label">{{ t.payload_before }}</label>
+                                    <input type="text" class="form-control" id="mqttPayloadBefore">
+                                </div>
+                                <div class="form-group">
+                                    <label for="mqttWaitSeconds" class="form-label">{{ t.wait_seconds }}</label>
+                                    <input type="number" class="form-control" id="mqttWaitSeconds" min="0" max="300" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="mqttTimeoutMinutes" class="form-label">{{ t.timeout_minutes }}</label>
+                                    <input type="number" class="form-control" id="mqttTimeoutMinutes" min="1" max="1440" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="mqttTopicAfter" class="form-label">{{ t.topic_after }}</label>
+                                    <input type="text" class="form-control" id="mqttTopicAfter" required>
+                                </div>
+                                <div class="form-group">
+                                    <label for="mqttPayloadAfter" class="form-label">{{ t.payload_after }}</label>
+                                    <input type="text" class="form-control" id="mqttPayloadAfter">
+                                </div>
+                            </div>
+                            <button type="submit" class="btn btn-primary">{{ t.save_mqtt }}</button>
+                        </form>
+                    </div>
+                </section>
+
+                <section id="update" class="settings-section card">
+                    <div class="card-header">
+                        <h3 class="card-title">{{ t.system_update }}</h3>
+                        <p class="card-subtitle">{{ t.system_update_subtitle }}</p>
+                    </div>
+                    <div class="card-body">
+                        <p>{{ t.current_version }}: <strong id="currentVersion">{{ app_version }}</strong></p>
+                        <p>{{ t.github_version }}: <strong id="remoteVersion">–</strong></p>
+                        <p id="updateStatus" class="text-muted">{{ t.update_not_checked }}</p>
+                        <button type="button" class="btn btn-light" id="checkUpdateBtn">{{ t.check_updates }}</button>
+                        <button type="button" class="btn btn-primary" id="installUpdateBtn" disabled>{{ t.install_update }}</button>
+                        <small class="d-block mt-2 text-muted">{{ t.update_restart_notice }}</small>
+                    </div>
+                </section>
+            </div>
+        </div>
+        <div class="version-footer">Paperoo {{ app_version }}</div>
+    </main>
+</div>
+<script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
+<script>
+    window.settingsPage = {
+        csrfToken: {{ csrf_token | tojson }},
+        translations: {{ t | tojson }}
+    };
+</script>
+<script src="{{ url_for('static', filename='js/settings.js') }}"></script>
+</body>
+</html>

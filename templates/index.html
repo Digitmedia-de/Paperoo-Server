@@ -49,9 +49,10 @@
                         <span class="status-dot" id="statusDot"></span>
                         <span id="statusText">{{ t.online }}</span>
                     </div>
+                    <a href="/settings" class="btn btn-sm btn-light">{{ t.settings }}</a>
                     {% if session_info %}
                     <a href="/logout" class="btn btn-sm btn-light" title="{{ t.logout | default('Logout') }}">
-                        🚪 {{ t.logout | default('Logout') }}
+                        {{ t.logout | default('Logout') }}
                     </a>
                     {% endif %}
                 </div>
@@ -65,18 +66,71 @@
                 <div class="main-card">
                     <div class="card">
                         <div class="card-header">
-                            <h3 class="card-title">{{ t.create_new_todo }}</h3>
+                            <h3 class="card-title">{{ t.create_print }}</h3>
                             <p class="card-subtitle">{{ t.app_subtitle }}</p>
                         </div>
                         <div class="card-body">
                             <form id="todoForm">
                                 <div class="form-group">
-                                    <label for="todoText" class="form-label">{{ t.task_description }}</label>
-                                    <textarea 
-                                        class="form-control" 
-                                        id="todoText" 
+                                    <span class="form-label" id="printTypeLabel">{{ t.print_type }}</span>
+                                    <input type="hidden" id="printType" name="type" value="todo">
+                                    <div class="print-type-selector" role="radiogroup" aria-labelledby="printTypeLabel">
+                                        <button type="button" class="print-type-option active" data-type="todo" role="radio" aria-checked="true">
+                                            <span class="print-type-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="3"></rect><path d="m7 12 3 3 7-7"></path></svg></span>
+                                            <span class="print-type-name">{{ t.type_todo }}</span>
+                                        </button>
+                                        <button type="button" class="print-type-option" data-type="list" role="radio" aria-checked="false" tabindex="-1">
+                                            <span class="print-type-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 6h11M10 12h11M10 18h11"></path><path d="m3 5 1.5 1.5L7 4M3 11l1.5 1.5L7 10M3 17l1.5 1.5L7 16"></path></svg></span>
+                                            <span class="print-type-name">{{ t.type_list }}</span>
+                                        </button>
+                                        <button type="button" class="print-type-option" data-type="note" role="radio" aria-checked="false" tabindex="-1">
+                                            <span class="print-type-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6M8 13h8M8 17h6"></path></svg></span>
+                                            <span class="print-type-name">{{ t.type_note }}</span>
+                                        </button>
+                                        <button type="button" class="print-type-option" data-type="quote" role="radio" aria-checked="false" tabindex="-1">
+                                            <span class="print-type-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 11H6a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v6c0 4-2 6-5 7M20 11h-4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v6c0 4-2 6-5 7"></path></svg></span>
+                                            <span class="print-type-name">{{ t.type_quote }}</span>
+                                        </button>
+                                        <button type="button" class="print-type-option" data-type="image" role="radio" aria-checked="false" tabindex="-1">
+                                            <span class="print-type-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"></rect><circle cx="8.5" cy="8.5" r="1.5"></circle><path d="m21 15-5-5L5 21"></path></svg></span>
+                                            <span class="print-type-name">{{ t.type_image }}</span>
+                                        </button>
+                                        <button type="button" class="print-type-option" data-type="qr" role="radio" aria-checked="false" tabindex="-1">
+                                            <span class="print-type-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6"></rect><rect x="15" y="3" width="6" height="6"></rect><rect x="3" y="15" width="6" height="6"></rect><path d="M15 15h2v2h-2zM19 15h2v6h-6v-2M15 19h2"></path></svg></span>
+                                            <span class="print-type-name">{{ t.type_qr }}</span>
+                                        </button>
+                                        <button type="button" class="print-type-option" data-type="receipt" role="radio" aria-checked="false" tabindex="-1">
+                                            <span class="print-type-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M5 3v18l3-2 4 2 4-2 3 2V3l-3 2-4-2-4 2z"></path><path d="m9 11 2 2 4-4M9 17h6"></path></svg></span>
+                                            <span class="print-type-name">{{ t.type_receipt }}</span>
+                                        </button>
+                                    </div>
+                                </div>
+                                <div class="form-group" id="listTitleGroup" hidden>
+                                    <label for="listTitle" class="form-label">{{ t.list_title }}</label>
+                                    <input type="text" class="form-control" id="listTitle" name="title" maxlength="200">
+                                </div>
+                                <div class="form-group" id="quoteAuthorGroup" hidden>
+                                    <label for="quoteAuthor" class="form-label">{{ t.quote_author }}</label>
+                                    <input type="text" class="form-control" id="quoteAuthor" name="author" maxlength="200">
+                                </div>
+                                <div class="form-group" id="imageFileGroup" hidden>
+                                    <label for="imageFile" class="form-label">{{ t.image_file }}</label>
+                                    <input type="file" class="form-control" id="imageFile" name="image" accept="image/png,image/jpeg,image/gif,image/bmp,image/webp">
+                                    <small class="text-muted">{{ t.image_file_hint }}</small>
+                                </div>
+                                <div class="form-group" id="qrSizeGroup" hidden>
+                                    <label for="qrSize" class="form-label">{{ t.qr_size }}: <output id="qrSizeValue" for="qrSize">8</output></label>
+                                    <input type="range" class="form-range" id="qrSize" name="qr_size" min="1" max="16" step="1" value="8">
+                                    <div class="d-flex justify-content-between text-muted"><small>1</small><small>16</small></div>
+                                    <small class="text-muted">{{ t.qr_size_hint }}</small>
+                                </div>
+                                <div class="form-group">
+                                    <label for="todoText" class="form-label" id="textLabel">{{ t.task_description }}</label>
+                                    <textarea
+                                        class="form-control"
+                                        id="todoText"
                                         name="text"
-                                        rows="4" 
+                                        rows="4"
                                         placeholder="{{ t.task_placeholder }}"
                                         maxlength="500"
                                         required
@@ -84,9 +138,10 @@
                                     <div class="char-counter">
                                         <span id="charCount">0</span> / 500
                                     </div>
+                                    <small class="text-muted" id="listGroupHint" hidden>{{ t.list_group_hint }}</small>
                                 </div>
-                                
-                                <div class="form-group">
+
+                                <div class="form-group" id="priorityGroup">
                                     <label class="form-label">{{ t.priority_level }}</label>
                                     <div class="priority-group">
                                         <div class="priority-item">
@@ -132,7 +187,7 @@
                                 </div>
                                 
                                 <button type="submit" class="btn btn-primary btn-lg btn-block" id="printBtn">
-                                    <span id="btnText">{{ t.print_button }}</span>
+                                    <span id="btnText">{{ t.print_document }}</span>
                                     <span id="btnSpinner" style="display: none;">
                                         <span class="spinner-border spinner-border-sm" role="status"></span>
                                         {{ t.printing }}
@@ -191,70 +246,6 @@
                     </div>
                 </div>
                 
-                <!-- Printer Selection Card -->
-                <div class="main-card mt-4">
-                    <div class="card">
-                        <div class="card-header">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <h3 class="card-title">{{ t.printer_config }}</h3>
-                                <button type="button" class="btn btn-sm btn-light" id="refreshPrintersBtn">
-                                    🔄 {{ t.refresh }}
-                                </button>
-                            </div>
-                        </div>
-                        <div class="card-body">
-                            <div id="printerSelection" class="printer-list">
-                                <div class="loading-container">
-                                    <div class="spinner-border" role="status"></div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="main-card mt-4">
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">{{ t.motivation_settings }}</h3>
-                            <p class="card-subtitle">{{ t.motivation_subtitle }}</p>
-                        </div>
-                        <div class="card-body">
-                            <form id="motivationForm">
-                                <div class="form-group">
-                                    <label for="motivationProvider" class="form-label">{{ t.motivation_provider }}</label>
-                                    <select class="form-control" id="motivationProvider">
-                                        <option value="openai" {{ 'selected' if motivation_provider == 'openai' else '' }}>OpenAI</option>
-                                        <option value="anthropic" {{ 'selected' if motivation_provider == 'anthropic' else '' }}>Anthropic</option>
-                                        <option value="openrouter" {{ 'selected' if motivation_provider == 'openrouter' else '' }}>OpenRouter</option>
-                                        <option value="local" {{ 'selected' if motivation_provider == 'local' else '' }}>{{ t.motivation_local }}</option>
-                                    </select>
-                                </div>
-                                <div class="form-check mb-3">
-                                    <input class="form-check-input" type="checkbox" id="motivationEnabled" {{ 'checked' if motivation_enabled else '' }}>
-                                    <label class="form-check-label" for="motivationEnabled">{{ t.enable_motivation }}</label>
-                                </div>
-                                <button type="submit" class="btn btn-primary" id="saveMotivationBtn">{{ t.save_settings }}</button>
-                            </form>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="main-card mt-4">
-                    <div class="card">
-                        <div class="card-header">
-                            <h3 class="card-title">{{ t.system_update }}</h3>
-                            <p class="card-subtitle">{{ t.system_update_subtitle }}</p>
-                        </div>
-                        <div class="card-body">
-                            <p>{{ t.current_version }}: <strong id="currentVersion">{{ app_version }}</strong></p>
-                            <p>{{ t.github_version }}: <strong id="remoteVersion">–</strong></p>
-                            <p id="updateStatus" class="text-muted">{{ t.update_not_checked }}</p>
-                            <button type="button" class="btn btn-light" id="checkUpdateBtn">{{ t.check_updates }}</button>
-                            <button type="button" class="btn btn-primary" id="installUpdateBtn" disabled>{{ t.install_update }}</button>
-                            <small class="d-block mt-2 text-muted">{{ t.update_restart_notice }}</small>
-                        </div>
-                    </div>
-                </div>
             </div>
         </main>
     </div>
@@ -263,179 +254,94 @@
     <div class="print-animation" id="printAnimation">
         <div class="text-center">
             <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;"></div>
-            <h4>Printing ToDo...</h4>
+            <h4>{{ t.printing }}</h4>
         </div>
     </div>
-    
+
     <!-- jQuery -->
     <script src="{{ url_for('static', filename='js/jquery-3.7.1.min.js') }}"></script>
     <!-- Bootstrap Bundle JS -->
     <script src="{{ url_for('static', filename='js/bootstrap.bundle.min.js') }}"></script>
-    
+
     <script>
         // Store translations in JavaScript
         let translations = {{ t | tojson }};
         let currentLanguage = '{{ language }}';
-        
+
         $(document).ready(function() {
             // Character counter
             $('#todoText').on('input', function() {
                 const count = $(this).val().length;
                 $('#charCount').text(count);
             });
-            
+
             // Priority button selection
             $('.priority-label').on('click', function() {
                 $('.priority-label').removeClass('active');
                 $(this).addClass('active');
             });
-            
-            // Load available printers
-            function loadPrinters() {
-                $.ajax({
-                    url: '/api/printers',
-                    method: 'GET',
-                    success: function(response) {
-                        if (response.success) {
-                            displayPrinters(response.data.printers, response.data.current);
-                        } else {
-                            $('#printerSelection').html('<div class="alert alert-warning">' + translations.failed_load_printers + '</div>');
-                        }
-                    },
-                    error: function() {
-                        $('#printerSelection').html('<div class="alert alert-danger">' + translations.error_loading_printers + '</div>');
-                    }
+
+            function updateTypeFields() {
+                const type = $('#printType').val();
+                $('.print-type-option').each(function() {
+                    const selected = $(this).data('type') === type;
+                    $(this).toggleClass('active', selected);
+                    $(this).attr('aria-checked', selected);
+                    $(this).prop('tabindex', selected ? 0 : -1);
                 });
+                $('#listTitleGroup').prop('hidden', type !== 'list');
+                $('#listGroupHint').prop('hidden', type !== 'list');
+                $('#quoteAuthorGroup').prop('hidden', type !== 'quote');
+                $('#imageFileGroup').prop('hidden', type !== 'image');
+                $('#qrSizeGroup').prop('hidden', type !== 'qr');
+                $('#priorityGroup').prop('hidden', type !== 'todo');
+                $('#imageFile').prop('required', type === 'image');
+                $('#todoText').prop('required', type !== 'image');
+                const labelKeys = {
+                    todo: 'task_description',
+                    list: 'text_label_list',
+                    note: 'text_label_note',
+                    quote: 'text_label_quote',
+                    image: 'text_label_image',
+                    qr: 'text_label_qr',
+                    receipt: 'text_label_receipt'
+                };
+                const placeholderKeys = {
+                    todo: 'task_placeholder',
+                    list: 'placeholder_list',
+                    note: 'placeholder_note',
+                    quote: 'placeholder_quote',
+                    image: 'placeholder_image',
+                    qr: 'placeholder_qr',
+                    receipt: 'placeholder_receipt'
+                };
+                $('#textLabel').text(translations[labelKeys[type]]);
+                $('#todoText').attr('placeholder', translations[placeholderKeys[type]]);
             }
-            
-            // Display printers
-            function displayPrinters(printers, currentConfig) {
-                let html = '';
-                
-                // USB Printers
-                if (printers.usb && printers.usb.length > 0) {
-                    html += '<div class="printer-group-title">' + translations.usb_printers + '</div>';
-                    printers.usb.forEach(printer => {
-                        const isActive = currentConfig.type === 'usb' && 
-                                       currentConfig.vendor_id === printer.vendor_id && 
-                                       currentConfig.product_id === printer.product_id;
-                        html += `
-                            <div class="printer-item ${isActive ? 'active' : ''}" 
-                                 data-type="usb" 
-                                 data-vendor-id="${printer.vendor_id}" 
-                                 data-product-id="${printer.product_id}">
-                                <div class="printer-icon">🖨️</div>
-                                <div class="printer-info">
-                                    <div class="printer-name">${printer.description}</div>
-                                    <div class="printer-details">${printer.vendor_name} (${printer.vendor_id}:${printer.product_id})</div>
-                                </div>
-                                ${isActive ? '<span class="printer-badge">Active</span>' : ''}
-                            </div>
-                        `;
-                    });
-                }
-                
-                // Serial Printers
-                if (printers.serial && printers.serial.length > 0) {
-                    html += '<div class="printer-group-title">' + translations.serial_ports + '</div>';
-                    printers.serial.forEach(printer => {
-                        const isActive = currentConfig.type === 'serial' && 
-                                       currentConfig.serial_port === printer.port;
-                        html += `
-                            <div class="printer-item ${isActive ? 'active' : ''}" 
-                                 data-type="serial" 
-                                 data-port="${printer.port}">
-                                <div class="printer-icon">🔌</div>
-                                <div class="printer-info">
-                                    <div class="printer-name">${printer.description}</div>
-                                    <div class="printer-details">${printer.port}</div>
-                                </div>
-                                ${isActive ? '<span class="printer-badge">Active</span>' : ''}
-                            </div>
-                        `;
-                    });
-                }
-                
-                // Manual Network Printer option
-                html += '<div class="printer-group-title">' + translations.network_printer + '</div>';
-                html += `
-                    <div class="printer-item ${currentConfig.type === 'network' ? 'active' : ''}" 
-                         id="networkPrinterItem">
-                        <div class="printer-icon">🌐</div>
-                        <div class="printer-info">
-                            <div class="printer-name">Network Printer</div>
-                            <input type="text" class="form-control form-control-sm mt-2" 
-                                   id="networkPrinterIP" 
-                                   placeholder="' + translations.enter_ip + '"
-                                   value="${currentConfig.type === 'network' ? currentConfig.network_ip || '' : ''}">
-                        </div>
-                        ${currentConfig.type === 'network' ? '<span class="printer-badge">Active</span>' : ''}
-                    </div>
-                `;
-                
-                if (printers.usb.length === 0 && printers.serial.length === 0) {
-                    html += '<div class="alert alert-warning">' + translations.no_printers + '</div>';
-                }
-                
-                $('#printerSelection').html(html);
-            }
-            
-            // Handle printer selection
-            $(document).on('click', '.printer-item', function() {
-                const $item = $(this);
-                const type = $item.data('type');
-                let printerConfig = { type: type };
-                
-                if (type === 'usb') {
-                    printerConfig.vendor_id = $item.data('vendor-id');
-                    printerConfig.product_id = $item.data('product-id');
-                } else if (type === 'serial') {
-                    printerConfig.port = $item.data('port');
-                } else if (type === 'network' || $item.attr('id') === 'networkPrinterItem') {
-                    const ip = $('#networkPrinterIP').val().trim();
-                    if (!ip) {
-                        showAlert(translations.please_enter_ip, 'warning');
-                        return;
-                    }
-                    printerConfig.type = 'network';
-                    printerConfig.ip = ip;
-                }
-                
-                // Save printer configuration
-                $.ajax({
-                    url: '/api/printers/select',
-                    method: 'POST',
-                    contentType: 'application/json',
-                    data: JSON.stringify(printerConfig),
-                    success: function(response) {
-                        if (response.success) {
-                            showAlert(translations.printer_saved, 'success');
-                            $('.printer-item').removeClass('active');
-                            $item.addClass('active');
-                            // Reload printers to show updated status
-                            loadPrinters();
-                        } else {
-                            showAlert('❌ ' + (response.error || 'Failed to save printer'), 'danger');
-                        }
-                    },
-                    error: function(xhr) {
-                        let message = 'Failed to save printer configuration';
-                        if (xhr.responseJSON && xhr.responseJSON.message) {
-                            message = xhr.responseJSON.message;
-                        }
-                        showAlert(translations.print_error + ': ' + message, 'danger');
-                    }
-                });
+
+            $('#qrSize').on('input', function() {
+                $('#qrSizeValue').text($(this).val());
             });
-            
-            // Refresh printers button
-            $('#refreshPrintersBtn').on('click', function() {
-                $('#printerSelection').html('<div class="loading-container"><div class="spinner-border" role="status"></div></div>');
-                loadPrinters();
+
+            $('.print-type-option').on('click', function() {
+                $('#printType').val($(this).data('type')).trigger('change');
             });
-            
-            // Load printers on page load
-            loadPrinters();
+
+            $('.print-type-option').on('keydown', function(event) {
+                if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+                event.preventDefault();
+                const options = $('.print-type-option');
+                const currentIndex = options.index(this);
+                let nextIndex = currentIndex;
+                if (event.key === 'Home') nextIndex = 0;
+                else if (event.key === 'End') nextIndex = options.length - 1;
+                else if (['ArrowRight', 'ArrowDown'].includes(event.key)) nextIndex = (currentIndex + 1) % options.length;
+                else nextIndex = (currentIndex - 1 + options.length) % options.length;
+                options.eq(nextIndex).trigger('click').trigger('focus');
+            });
+
+            $('#printType').on('change', updateTypeFields);
+            updateTypeFields();
             
             // Load queue status
             function loadQueueStatus() {
@@ -542,209 +448,88 @@
             // Language selection via flags
             $('.lang-btn').on('click', function() {
                 const language = $(this).data('lang');
-                if (language === currentLanguage) return; // Don't reload if same language
-                
-                localStorage.setItem('language', language);
-                currentLanguage = language;
-                
-                // Update visual state immediately
-                $('.lang-btn').removeClass('active');
-                $(this).addClass('active');
-                
-                // Update server configuration and get new translations
+                if (language === currentLanguage) return;
                 $.ajax({
                     url: '/api/settings/language',
                     method: 'POST',
                     contentType: 'application/json',
+                    headers: { 'X-CSRF-Token': '{{ csrf_token }}' },
                     data: JSON.stringify({ language: language }),
-                    success: function(response) {
-                        if (response.success) {
-                            translations = response.translations;
-                            // Reload page to apply new language
-                            location.reload();
-                        }
-                    }
-                });
-            });
-            
-            $('#motivationForm').on('submit', function(e) {
-                e.preventDefault();
-                $('#saveMotivationBtn').prop('disabled', true);
-                $.ajax({
-                    url: '/api/settings/motivation',
-                    method: 'POST',
-                    contentType: 'application/json',
-                    headers: { 'X-CSRF-Token': '{{ csrf_token }}' },
-                    data: JSON.stringify({
-                        provider: $('#motivationProvider').val(),
-                        enabled: $('#motivationEnabled').is(':checked')
-                    }),
-                    success: function(response) {
-                        if (response.success) {
-                            showAlert(translations.motivation_saved, 'success');
-                        }
-                    },
-                    error: function(xhr) {
-                        const message = xhr.responseJSON && xhr.responseJSON.error
-                            ? xhr.responseJSON.error
-                            : translations.motivation_save_failed;
-                        showAlert(message, 'danger');
-                    },
-                    complete: function() {
-                        $('#saveMotivationBtn').prop('disabled', false);
-                    }
-                });
-            });
-
-            let updatePolling = null;
-
-            function showUpdateError(xhr) {
-                const message = xhr.responseJSON && xhr.responseJSON.error
-                    ? xhr.responseJSON.error
-                    : translations.update_check_failed;
-                $('#updateStatus').text(message).addClass('text-danger');
-                $('#checkUpdateBtn').prop('disabled', false);
-            }
-
-            function pollUpdateStatus() {
-                if (updatePolling) return;
-                updatePolling = setInterval(function() {
-                    $.ajax({
-                        url: '/api/system/update/status',
-                        method: 'GET',
-                        success: function(response) {
-                            const job = response.data.job;
-                            if (!job) return;
-                            $('#currentVersion').text(response.data.current_version);
-                            $('#updateStatus').text(job.message).removeClass('text-danger');
-                            if (!job.running) {
-                                clearInterval(updatePolling);
-                                updatePolling = null;
-                                $('#checkUpdateBtn').prop('disabled', false);
-                                if (job.status === 'success') {
-                                    $('#remoteVersion').text(response.data.current_version);
-                                    setTimeout(function() { location.reload(); }, 1500);
-                                }
-                            }
-                        }
-                    });
-                }, 2000);
-            }
-
-            $('#checkUpdateBtn').on('click', function() {
-                $('#checkUpdateBtn').prop('disabled', true);
-                $('#installUpdateBtn').prop('disabled', true);
-                $('#updateStatus').removeClass('text-danger').text(translations.checking_updates);
-                $.ajax({
-                    url: '/api/system/update/check',
-                    method: 'POST',
-                    headers: { 'X-CSRF-Token': '{{ csrf_token }}' },
-                    success: function(response) {
-                        $('#remoteVersion').text(response.remote_version);
-                        if (response.update_available && response.fast_forward_possible) {
-                            $('#updateStatus').text(translations.update_available);
-                            $('#installUpdateBtn').prop('disabled', false);
-                        } else if (!response.fast_forward_possible) {
-                            $('#updateStatus').text(translations.update_diverged);
-                        } else {
-                            $('#updateStatus').text(translations.up_to_date);
-                        }
-                    },
-                    error: showUpdateError,
-                    complete: function() {
-                        $('#checkUpdateBtn').prop('disabled', false);
-                    }
-                });
-            });
-
-            $('#installUpdateBtn').on('click', function() {
-                if (!confirm(translations.confirm_update)) return;
-                $('#installUpdateBtn').prop('disabled', true);
-                $('#checkUpdateBtn').prop('disabled', true);
-                $.ajax({
-                    url: '/api/system/update/install',
-                    method: 'POST',
-                    headers: { 'X-CSRF-Token': '{{ csrf_token }}' },
                     success: function() {
-                        $('#updateStatus').text(translations.update_started);
-                        pollUpdateStatus();
-                    },
-                    error: showUpdateError
+                        location.reload();
+                    }
                 });
-            });
-
-            $.get('/api/system/update/status', function(response) {
-                if (response.data.job && response.data.job.running) {
-                    $('#updateStatus').text(response.data.job.message);
-                    $('#checkUpdateBtn').prop('disabled', true);
-                    $('#installUpdateBtn').prop('disabled', true);
-                    pollUpdateStatus();
-                }
             });
 
             // Form submission
             $('#todoForm').on('submit', function(e) {
                 e.preventDefault();
-                
+                const type = $('#printType').val();
                 const text = $('#todoText').val().trim();
-                const priority = $('input[name="priority"]:checked').val();
-                
-                if (!text) {
+                const imageFile = $('#imageFile')[0].files[0];
+
+                if (type !== 'image' && !text) {
                     showAlert(translations.please_enter_task, 'danger');
                     return;
                 }
-                
-                // Disable form during submission
+                if (type === 'image' && !imageFile) {
+                    showAlert(translations.image_required, 'danger');
+                    return;
+                }
+                if (imageFile && imageFile.size > 10 * 1024 * 1024) {
+                    showAlert(translations.image_too_large, 'danger');
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('type', type);
+                formData.append('text', text);
+                formData.append('priority', $('input[name="priority"]:checked').val());
+                formData.append('title', $('#listTitle').val());
+                formData.append('author', $('#quoteAuthor').val());
+                formData.append('qr_size', $('#qrSize').val());
+                formData.append('csrf_token', '{{ csrf_token }}');
+                if (imageFile) formData.append('image', imageFile);
+
                 $('#printBtn').prop('disabled', true);
                 $('#btnText').hide();
                 $('#btnSpinner').show();
-                
-                // Show print animation
                 $('#printAnimation').addClass('show');
-                
-                // Send print request
+
                 $.ajax({
                     url: '/print',
                     method: 'POST',
-                    data: {
-                        text: text,
-                        priority: priority,
-                        csrf_token: '{{ csrf_token }}'
-                    },
+                    data: formData,
+                    processData: false,
+                    contentType: false,
                     success: function(response) {
                         if (response.success) {
-                            const message = response.queued 
-                                ? translations.print_queued || 'ToDo saved to queue for printing'
-                                : translations.print_success;
+                            const message = response.queued
+                                ? translations.print_queued_generic
+                                : translations.print_success_generic;
                             showAlert(message, response.queued ? 'info' : 'success');
-                            $('#todoText').val('');
+                            $('#todoText, #listTitle, #quoteAuthor').val('');
+                            $('#imageFile').val('');
                             $('#charCount').text('0');
-                            
-                            // Reset priority to normal
                             $('.priority-label').removeClass('active');
                             $('.priority-label[data-priority="3"]').addClass('active');
                             $('input[name="priority"][value="3"]').prop('checked', true);
-                            
-                            // Refresh queue status
                             loadQueueStatus();
                         } else {
                             showAlert(translations.print_error + ': ' + (response.message || translations.failed_print), 'danger');
                         }
                     },
                     error: function(xhr) {
-                        let message = 'Failed to print ToDo';
-                        if (xhr.responseJSON && xhr.responseJSON.message) {
-                            message = xhr.responseJSON.message;
+                        let message = translations.failed_print;
+                        if (xhr.responseJSON && (xhr.responseJSON.message || xhr.responseJSON.error)) {
+                            message = xhr.responseJSON.message || xhr.responseJSON.error;
                         }
                         showAlert(translations.print_error + ': ' + message, 'danger');
                     },
                     complete: function() {
-                        // Re-enable form
                         $('#printBtn').prop('disabled', false);
                         $('#btnText').show();
                         $('#btnSpinner').hide();
-                        
-                        // Hide print animation
                         setTimeout(function() {
                             $('#printAnimation').removeClass('show');
                         }, 500);

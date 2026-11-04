@@ -52,11 +52,23 @@ curl -X GET http://localhost:5001/api/status \
 
 ### Drucken
 - `POST /api/print` - To-do, Einkaufsliste, Notiz, Zitat, Bild, QR-Code oder Aufgabenquittung drucken
+- `POST /print` - Browser-Druck mit Websession und CSRF-Token; unterstützt alle sieben Typen und Bild-Upload als Multipart-Formular
 
 Das optionale Feld `type` akzeptiert `todo` (Standard), `list`, `note`, `quote`, `image`, `qr` und `receipt`. Unbekannte Werte fallen auf `todo` zurück. Listen und Quittungen lesen ihre Einträge zeilenweise aus `text`; Zitate akzeptieren `author`, Listen `title` oder `list_name`. Bilder werden als Base64 in `image` übertragen und benötigen keinen `text`.
 
+Listen können gruppiert werden: Eine Zeile mit `# Überschrift` beginnt eine fett gedruckte Gruppe, die folgenden Zeilen sind deren Einträge. Beispiel: `# Obst`, dann `Äpfel` und `Bananen`, danach `# Backwaren`, dann `Brot`. Ungroupierte Listen bleiben unverändert. Kästchen und Häkchen verwenden den internationalen Standardzeichensatz, damit eckige Klammern nicht als Umlaute erscheinen.
+
+QR-Codes akzeptieren `qr_size` mit Werten von 1 bis 16. Der Standard ist 8; ungültige Werte werden auf diesen Bereich begrenzt. Die Weboberfläche bietet dafür einen Regler. Die Modulgröße wird mit den Warteschlangen-Metadaten gespeichert und bei Wiederholungen erneut verwendet.
+
 ### Einstellungen
-- `POST /api/settings/motivation` - KI-Anbieter und Aktivierung über die Weboberfläche einstellen (Websession und `X-CSRF-Token` erforderlich)
+- `GET /api/settings` - nicht geheime aktuelle Einstellungen und Status gespeicherter Zugangsschlüssel lesen
+- `POST /api/settings/auth` - Passwortschutz, Benutzername, Passwort und Sitzungszeiten ändern
+- `POST /api/settings/motivation` - KI-Anbieter, Modell, Basis-URL, API-Schlüssel und Aktivierung einstellen
+- `POST /api/settings/mqtt` - MQTT-Broker, Zugangsdaten, Topics, Payloads und Zeiten einstellen
+- `POST /api/settings/language` - Sprache dauerhaft speichern
+- `POST /api/printers/select` - Druckerkonfiguration speichern
+
+Alle schreibenden Endpunkte benötigen eine Websession und `X-CSRF-Token`. Bei aktivem Passwortschutz verlangt die Änderung der Zugangseinstellungen zusätzlich `current_password`. API- und MQTT-Schlüssel werden in Antworten nicht ausgegeben; ein leeres Feld behält den bisherigen Wert. Der separate Bereich ist unter `/settings` erreichbar.
 
 ### Systemupdates
 - `GET /api/system/update/status` - installierte Version und letzten Update-Job lesen
@@ -167,6 +179,15 @@ print(response.json())
 ```
 
 ## 📝 Änderungsprotokoll
+
+### Version 1.0.7
+- Separater Einstellungen-Bereich `/settings` für Zugang, Drucker, KI, MQTT und Updates
+- Passwortschutz und Passwortwechsel über die Weboberfläche mit aktuellem Passwort als Bestätigung
+- Vollständige KI- und MQTT-Konfiguration ohne Ausgabe gespeicherter Geheimnisse
+- Atomare `.env`-Speicherung, sofortige Übernahme und CSRF-Schutz für Einstellungsänderungen
+- Alle sieben Druckarten als responsive Karten-Auswahl mit typspezifischen Feldern und Bild-Upload
+- Gruppierte Listen mit `# Überschrift`, druckersicheren Kästchen und eingerückten Folgezeilen
+- QR-Code-Modulgröße 1–16 per Regler oder `qr_size`, Standard 8 und Übernahme in Warteschlangen-Wiederholungen
 
 ### Version 1.0.5
 - Lokale und GitHub-Versionsprüfung über `update.sh`
