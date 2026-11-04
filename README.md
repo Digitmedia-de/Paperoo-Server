@@ -30,9 +30,9 @@ An intelligent task manager with receipt printer functionality. Print your tasks
 ```bash
 # 1. Download project
 cd /opt
-sudo git clone https://github.com/yourusername/paperoo.git
-sudo chown -R $USER:$USER /opt/paperoo
-cd paperoo
+sudo git clone https://github.com/Digitmedia-de/Paperoo-Server.git /opt/Paperoo-Server
+sudo chown -R $USER:$USER /opt/Paperoo-Server
+cd /opt/Paperoo-Server
 
 # 2. Automatic installation
 chmod +x quick_install.sh
@@ -123,7 +123,8 @@ LANGUAGE=en  # de or en
 # Web Authentication (optional)
 WEB_AUTH_ENABLED=true
 WEB_USERNAME=admin
-WEB_PASSWORD=secure-password
+WEB_PASSWORD_HASH=scrypt:32768:8:1$...  # Generate with the command below
+# WEB_PASSWORD=secure-password  # Legacy fallback; avoid for new installations
 WEB_SESSION_TIMEOUT=1440  # minutes
 
 # IP Whitelist (optional)
@@ -140,14 +141,23 @@ MQTT_ENABLED=false
 MQTT_BROKER=localhost
 ```
 
+`SECRET_KEY` is required; the server refuses to start without it. Generate the web password hash with:
+
+```bash
+python3 -c "from werkzeug.security import generate_password_hash as g; print(g('YOUR_PASSWORD'))"
+```
+
+Store the output in `WEB_PASSWORD_HASH`. The legacy `WEB_PASSWORD` variable remains supported for compatibility, but logs a startup warning. If both are set, the hash takes precedence.
+
 ## 🔌 API Documentation
 
 ### Authentication
 
-The API uses Bearer Token authentication:
+The API accepts Bearer Token authentication or the `X-API-Key` header. Query-string API keys are not accepted:
 
 ```bash
 Authorization: Bearer your-api-key
+X-API-Key: your-api-key
 ```
 
 ### Main Endpoints
@@ -283,9 +293,9 @@ After=network.target
 [Service]
 Type=simple
 User=YOUR_USERNAME
-WorkingDirectory=/opt/paperoo
-Environment="PATH=/opt/paperoo/venv/bin"
-ExecStart=/opt/paperoo/venv/bin/python /opt/paperoo/app.py
+WorkingDirectory=/opt/Paperoo-Server
+Environment="PATH=/opt/Paperoo-Server/venv/bin"
+ExecStart=/opt/Paperoo-Server/venv/bin/python /opt/Paperoo-Server/app.py
 Restart=on-failure
 RestartSec=10
 

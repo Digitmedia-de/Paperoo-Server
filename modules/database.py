@@ -2,7 +2,7 @@ import sqlite3
 import os
 from datetime import datetime
 import logging
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Tuple
 import threading
 import json
 
@@ -47,6 +47,14 @@ class TodoDatabase:
                     CREATE INDEX IF NOT EXISTS idx_created_at 
                     ON todos(created_at)
                 ''')
+
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS login_attempts (
+                        ip_address TEXT PRIMARY KEY,
+                        failed_attempts INTEGER NOT NULL DEFAULT 0,
+                        last_attempt_at TEXT NOT NULL
+                    )
+                ''')
                 
                 conn.commit()
                 conn.close()
@@ -56,6 +64,51 @@ class TodoDatabase:
                 logger.error(f"Error initializing database: {str(e)}")
                 raise
     
+    def get_login_attempt(self, ip_address: str) -> Optional[Tuple[int, datetime]]:
+        """Get the failed login count and timestamp for an IP address"""
+        with self.lock:
+            try:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                cursor.execute('''
+                    SELECT failed_attempts, last_attempt_at
+                    FROM login_attempts
+                    WHERE ip_address = ?
+                ''', (ip_address,))
+                row = cursor.fetchone()
+                conn.close()
+
+                if row:
+                    return row[0], datetime.fromisoformat(row[1])
+                return None
+            except Exception as e:
+                logger.error(f"Error getting login attempt: {str(e)}")
+                raise
+
+    def save_login_attempt(self, ip_address: str, count: int, timestamp: datetime):
+        """Save or clear failed login attempts for an IP address"""
+        with self.lock:
+            try:
+                conn = sqlite3.connect(self.db_path)
+                cursor = conn.cursor()
+                if count > 0:
+                    cursor.execute('''
+                        INSERT INTO login_attempts (ip_address, failed_attempts, last_attempt_at)
+                        VALUES (?, ?, ?)
+                        ON CONFLICT(ip_address) DO UPDATE SET
+                            failed_attempts = excluded.failed_attempts,
+                            last_attempt_at = excluded.last_attempt_at
+                    ''', (ip_address, count, timestamp.isoformat()))
+                else:
+                    cursor.execute('''
+                        DELETE FROM login_attempts WHERE ip_address = ?
+                    ''', (ip_address,))
+                conn.commit()
+                conn.close()
+            except Exception as e:
+                logger.error(f"Error saving login attempt: {str(e)}")
+                raise
+
     def add_todo(self, text: str, priority: int = 3, metadata: Dict = None) -> int:
         """Add a new todo to the database"""
         with self.lock:

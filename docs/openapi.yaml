@@ -10,10 +10,11 @@ info:
     
     ## Authentifizierung
     
-    Die API verwendet Bearer Token Authentifizierung. Senden Sie Ihren API-Key im Authorization Header:
+    Die API akzeptiert Bearer Token oder den X-API-Key-Header. URL-Parameter sind nicht erlaubt:
     
     ```
     Authorization: Bearer your-api-key-here
+    X-API-Key: your-api-key-here
     ```
     
     ## Basis-URL
@@ -26,7 +27,7 @@ info:
     
     Aktuell gibt es kein Rate Limiting, dies kann sich in zukünftigen Versionen ändern.
     
-  version: 1.0.0
+  version: 1.0.2
   contact:
     name: Paperoo Support
     email: support@example.com
@@ -54,6 +55,7 @@ tags:
 
 security:
   - BearerAuth: []
+  - ApiKeyAuth: []
 
 paths:
   /api/print:
@@ -322,6 +324,11 @@ components:
       type: http
       scheme: bearer
       description: Bearer Token Authentifizierung mit API-Key
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API-Key im X-API-Key-Header
 
   schemas:
     PrintResponse:
@@ -360,6 +367,10 @@ components:
         data:
           type: object
           properties:
+            version:
+              type: string
+              description: Paperoo-Server-Version
+              example: 1.0.2
             printer_configured:
               type: boolean
               description: Ob ein Drucker konfiguriert ist

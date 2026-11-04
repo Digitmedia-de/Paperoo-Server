@@ -65,11 +65,20 @@ curl -X GET http://localhost:5001/api/status \
 
 ## 🔐 Authentifizierung
 
-Die API verwendet Bearer Token Authentifizierung:
+Die API akzeptiert Bearer Token oder den `X-API-Key`-Header. API-Keys werden nicht als URL-Parameter akzeptiert:
 
 ```
 Authorization: Bearer your-api-key-here
+X-API-Key: your-api-key-here
 ```
+
+Für die Web-Anmeldung sollte das Passwort als Werkzeug-Hash in `WEB_PASSWORD_HASH` gespeichert werden:
+
+```bash
+python3 -c "from werkzeug.security import generate_password_hash as g; print(g('DEIN_PASSWORT'))"
+```
+
+Das bisherige `WEB_PASSWORD` bleibt als Klartext-Fallback mit Startwarnung kompatibel. Zusätzlich muss `SECRET_KEY` gesetzt sein; ohne diesen Wert startet der Server nicht.
 
 ## 🌍 Mehrsprachigkeit
 
@@ -146,6 +155,17 @@ print(response.json())
 ```
 
 ## 📝 Änderungsprotokoll
+
+### Version 1.0.2
+- Pauschale CORS-Freigabe entfernt
+- Login-Sperre bleibt über Server-Neustarts erhalten
+- `SECRET_KEY` ist für den Serverstart erforderlich
+- Serverversion in `GET /api/status`
+
+### Version 1.0.1
+- Webdruck mit Session- und CSRF-Schutz
+- Unterstützung für `WEB_PASSWORD_HASH`
+- API-Key nur noch per `Authorization`- oder `X-API-Key`-Header
 
 ### Version 1.0.0
 - Initiale API-Version
