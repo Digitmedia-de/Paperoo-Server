@@ -3,7 +3,7 @@
 Alle nennenswerten Änderungen am Server werden hier festgehalten.
 Versionierung: nur die letzte Stelle wird erhöht (z. B. 1.0.1 → 1.0.2), außer es wird ausdrücklich etwas anderes vereinbart.
 
-## [Unveröffentlicht]
+## [1.0.8]
 
 ### Einstellungen und Druckoberfläche (Version 1.0.7)
 - Neuer separater Bereich `/settings` für Zugangsschutz, Drucker, KI-Anbieter, MQTT und Systemupdates; die Druckseite konzentriert sich auf Aufgaben und Warteschlange.
@@ -15,6 +15,12 @@ Versionierung: nur die letzte Stelle wird erhöht (z. B. 1.0.1 → 1.0.2), auße
 - Geheimnisse werden nicht über die Einstellungs-API ausgegeben. Änderungen an `.env` erfolgen atomar und werden ohne manuellen Neustart übernommen.
 - Schreibende Einstellungs- und Drucker-Endpunkte verwenden Websession und CSRF-Schutz; die Sprachwahl wird dauerhaft gespeichert.
 - Leere Zugangswerte in `.env.example` stehen ohne Inline-Kommentare; bekannte Kommentar-Platzhalter aus bestehenden Installationen werden nicht mehr als Zugangsdaten interpretiert.
+
+### API-Schlüssel und Druckprotokoll (unveröffentlicht)
+- Unter `/settings` können beliebig viele API-Schlüssel mit Kommentar erstellt und deaktiviert werden. Neue Schlüssel werden nur einmal im Klartext angezeigt und anschließend ausschließlich als SHA-256-Hash gespeichert.
+- Der bisherige `API_KEY` aus `.env` bleibt als nicht löschbarer Standard-Schlüssel kompatibel. Nutzungen und letzte Verwendung werden für alle Schlüssel gezählt; Druckaufträge werden zusätzlich nach Druckart gruppiert.
+- Das neue Druckprotokoll zeigt Zeitpunkt, Schlüssel, Druckart, Inhalt, Zusatzfelder und Annahmestatus. Bilddaten und API-Schlüssel werden nicht protokolliert; ältere Aufträge werden nicht rückwirkend zugeordnet.
+- Warteschlangenendpunkte akzeptieren für iOS zusätzlich API-Keys; Websessions bleiben unterstützt und Browser-Schreibzugriffe benötigen CSRF. Das Leeren der Warteschlange verwendet nun korrekt die Spalte `print_status`.
 
 ### Dokumentation
 - `README.md`: Installationsbefehl zeigt auf das korrekte Repository `Digitmedia-de/Paperoo-Server`.

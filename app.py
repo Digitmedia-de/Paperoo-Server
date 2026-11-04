@@ -9,11 +9,12 @@ import subprocess
 import threading
 import time
 from datetime import timedelta
+from functools import wraps
 from io import BytesIO
 from pathlib import Path
 
 from dotenv import load_dotenv
-from flask import Flask, jsonify, redirect, render_template, request, session, url_for
+from flask import Flask, g, jsonify, redirect, render_template, request, session, url_for
 from PIL import Image, UnidentifiedImageError
 from werkzeug.security import generate_password_hash
 
@@ -48,7 +49,7 @@ logger = logging.getLogger(__name__)
 logging.getLogger('modules.mqtt_handler').setLevel(logging.INFO)
 logging.getLogger('modules.printer_manager').setLevel(logging.INFO)
 
-APP_VERSION = '1.0.7'
+APP_VERSION = '1.0.8'
 PRINT_TYPES = {'todo', 'list', 'note', 'quote', 'image', 'qr', 'receipt'}
 MOTIVATION_PROVIDERS = {'openai', 'anthropic', 'openrouter', 'local'}
 UPDATE_SCRIPT = SERVER_ROOT / 'update.sh'
@@ -68,8 +69,8 @@ app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
 config = load_config()
 printer_manager = PrinterManager(config)
 mqtt_handler = MQTTHandler(config) if config['MQTT_ENABLED'].lower() == 'true' else None
-auth_manager = AuthManager(os.getenv('API_KEY'))
 todo_db = TodoDatabase(str(SERVER_ROOT / 'todos.db'))
+auth_manager = AuthManager(os.getenv('API_KEY'), todo_db)
 queue_manager = PrintQueueManager(todo_db, printer_manager, mqtt_handler)
 queue_manager.start()
 session_manager = SessionManager(config, todo_db)
@@ -100,7 +101,7 @@ def reload_config():
                 mqtt_handler = None
             queue_manager.printer_manager = printer_manager
             queue_manager.mqtt_handler = mqtt_handler
-            auth_manager = AuthManager(os.getenv('API_KEY'))
+            auth_manager = AuthManager(os.getenv('API_KEY'), todo_db)
             session_manager.update_config(config)
             logger.info('Configuration reloaded from .env file')
         if env_file_path.exists():
@@ -338,6 +339,57 @@ def api_update_auth_settings():
         return jsonify({'success': False, 'error': 'Could not save authentication settings'}), 500
 
 
+@app.route('/api/settings/api-keys', methods=['GET'])
+@session_manager.require_auth
+def api_get_managed_api_keys():
+    return jsonify({'success': True, 'data': todo_db.get_api_keys()})
+
+
+@app.route('/api/settings/api-keys', methods=['POST'])
+@session_manager.require_auth
+@session_manager.require_csrf
+def api_create_managed_api_key():
+    try:
+        data = request.get_json(silent=True) or {}
+        comment = text_value(data.get('comment', ''), 'comment', 200, required=True)
+        raw_key = auth_manager.generate_api_key()
+        key_id = todo_db.create_api_key(
+            auth_manager.hash_api_key(raw_key),
+            raw_key[:12],
+            comment,
+        )
+        key = next(item for item in todo_db.get_api_keys() if item['id'] == key_id)
+        return jsonify({'success': True, 'data': {'api_key': raw_key, 'key': key}}), 201
+    except SettingsError as e:
+        return jsonify({'success': False, 'error': str(e)}), 400
+    except Exception as e:
+        logger.error(f'Could not create API key: {str(e)}')
+        return jsonify({'success': False, 'error': 'Could not create API key'}), 500
+
+
+@app.route('/api/settings/api-keys/<int:key_id>', methods=['DELETE'])
+@session_manager.require_auth
+@session_manager.require_csrf
+def api_revoke_managed_api_key(key_id):
+    if todo_db.revoke_api_key(key_id):
+        return jsonify({'success': True})
+    return jsonify({'success': False, 'error': 'The API key is already inactive or is the legacy key'}), 400
+
+
+@app.route('/api/settings/print-log', methods=['GET'])
+@session_manager.require_auth
+def api_get_print_log():
+    try:
+        limit = request.args.get('limit', 100, type=int)
+        key_id = request.args.get('key_id', type=int)
+        return jsonify({
+            'success': True,
+            'data': todo_db.get_print_events(limit=limit, key_id=key_id),
+        })
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'Invalid log filter'}), 400
+
+
 def save_motivation_settings(data):
     provider = data.get('provider', config.get('MOTIVATION_PROVIDER', 'openai'))
     enabled = data.get('enabled', config.get('MOTIVATION_ENABLED', 'false').lower() == 'true')
@@ -467,6 +519,17 @@ def api_reload_config():
             'error': str(e)
         }), 500
 
+def require_api_or_web_auth(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if request.headers.get('Authorization') or request.headers.get('X-API-Key'):
+            return auth_manager.require_api_key(f)(*args, **kwargs)
+        if request.method in {'POST', 'PUT', 'PATCH', 'DELETE'}:
+            return session_manager.require_auth(session_manager.require_csrf(f))(*args, **kwargs)
+        return session_manager.require_auth(f)(*args, **kwargs)
+    return decorated_function
+
+
 # API Routes
 @app.route('/api/print', methods=['POST'])
 @auth_manager.require_api_key
@@ -535,6 +598,18 @@ def api_print_todo():
             metadata['qr_size'] = min(16, max(1, qr_size))
 
         success, message, todo_id = queue_manager.add_todo(text, priority, metadata)
+        key_record = g.get('api_key_record')
+        try:
+            todo_db.add_print_event(
+                key_record['id'] if key_record else None,
+                print_type,
+                text,
+                metadata,
+                language,
+                'printed' if success else 'queued',
+            )
+        except Exception as e:
+            logger.error(f'Could not record print event: {str(e)}')
         response_data = {
             'id': todo_id,
             'text': text,
@@ -827,7 +902,7 @@ def web_print_todo():
 
 # Queue management endpoints
 @app.route('/api/queue/status', methods=['GET'])
-@session_manager.require_auth
+@require_api_or_web_auth
 def api_queue_status():
     """Get queue status and statistics"""
     try:
@@ -844,7 +919,7 @@ def api_queue_status():
         }), 500
 
 @app.route('/api/queue/todos', methods=['GET'])
-@session_manager.require_auth
+@require_api_or_web_auth
 def api_get_todos():
     """Get list of recent todos"""
     try:
@@ -862,7 +937,7 @@ def api_get_todos():
         }), 500
 
 @app.route('/api/queue/pending', methods=['GET'])
-@session_manager.require_auth
+@require_api_or_web_auth
 def api_get_pending():
     """Get pending todos in queue"""
     try:
@@ -879,7 +954,7 @@ def api_get_pending():
         }), 500
 
 @app.route('/api/queue/retry', methods=['POST'])
-@session_manager.require_auth
+@require_api_or_web_auth
 def api_retry_failed():
     """Retry all failed todos"""
     try:
@@ -897,7 +972,7 @@ def api_retry_failed():
         }), 500
 
 @app.route('/api/queue/clear', methods=['POST'])
-@session_manager.require_auth
+@require_api_or_web_auth
 def api_clear_queue():
     """Clear all pending and failed todos from the queue"""
     try:

@@ -387,6 +387,7 @@
                 $.ajax({
                     url: '/api/queue/retry',
                     method: 'POST',
+                    headers: { 'X-CSRF-Token': '{{ csrf_token }}' },
                     success: function(response) {
                         if (response.success) {
                             showAlert(response.message, 'success');
@@ -405,6 +406,7 @@
                     $.ajax({
                         url: '/api/queue/clear',
                         method: 'POST',
+                        headers: { 'X-CSRF-Token': '{{ csrf_token }}' },
                         success: function(response) {
                             if (response.success) {
                                 showAlert(response.message, 'success');

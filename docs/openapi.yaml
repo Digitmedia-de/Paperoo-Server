@@ -27,7 +27,7 @@ info:
     
     Aktuell gibt es kein Rate Limiting, dies kann sich in zukünftigen Versionen ändern.
     
-  version: 1.0.7
+  version: 1.0.8
   contact:
     name: Paperoo Support
     email: support@example.com
@@ -231,6 +231,113 @@ paths:
           description: CSRF-Token fehlt oder ist ungültig
         '409':
           description: Ein anderes Update läuft bereits
+
+  /api/settings/api-keys:
+    get:
+      tags:
+        - Configuration
+      summary: API-Schlüssel und Statistik lesen
+      description: Liefert Kommentare, Präfixe, Nutzungszahlen, letzte Verwendung und Druckaufträge nach Typ, jedoch keine Schlüssel oder Hashes. Websession erforderlich.
+      operationId: getManagedApiKeys
+      security: []
+      responses:
+        '200':
+          description: Verwaltete API-Schlüssel mit Statistik
+        '401':
+          description: Anmeldung erforderlich
+    post:
+      tags:
+        - Configuration
+      summary: API-Schlüssel erstellen
+      description: Erstellt einen Schlüssel mit Kommentar. Nur diese Antwort enthält den Klartextschlüssel; gespeichert werden SHA-256-Hash und Präfix. Websession und CSRF-Token sind erforderlich.
+      operationId: createManagedApiKey
+      security: []
+      parameters:
+        - name: X-CSRF-Token
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [comment]
+              properties:
+                comment:
+                  type: string
+                  maxLength: 200
+                  example: iPhone
+      responses:
+        '201':
+          description: Schlüssel erstellt; api_key nur in dieser Antwort im Klartext
+        '400':
+          description: Kommentar fehlt oder ist ungültig
+        '401':
+          description: Anmeldung erforderlich
+        '403':
+          description: CSRF-Token fehlt oder ist ungültig
+
+  /api/settings/api-keys/{keyId}:
+    delete:
+      tags:
+        - Configuration
+      summary: API-Schlüssel deaktivieren
+      description: Deaktiviert einen benutzerdefinierten Schlüssel, behält aber Statistik und Protokoll. Der Standard-Schlüssel aus .env kann nicht deaktiviert werden. Websession und CSRF-Token sind erforderlich.
+      operationId: revokeManagedApiKey
+      security: []
+      parameters:
+        - name: keyId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: X-CSRF-Token
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Schlüssel deaktiviert
+        '400':
+          description: Bereits inaktiv oder Standard-Schlüssel
+        '401':
+          description: Anmeldung erforderlich
+        '403':
+          description: CSRF-Token fehlt oder ist ungültig
+
+  /api/settings/print-log:
+    get:
+      tags:
+        - Configuration
+      summary: Druckprotokoll lesen
+      description: Liefert Zeitpunkt, Schlüsselkommentar, Druckart, Text oder Bildunterschrift, Zusatzfelder und Annahmestatus. Keine Bilddaten oder Schlüssel. Websession erforderlich.
+      operationId: getPrintLog
+      security: []
+      parameters:
+        - name: key_id
+          in: query
+          required: false
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 200
+            default: 100
+      responses:
+        '200':
+          description: Druckprotokoll, neueste Einträge zuerst
+        '400':
+          description: Ungültiger Filter
+        '401':
+          description: Anmeldung erforderlich
 
   /api/settings:
     get:

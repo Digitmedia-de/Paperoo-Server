@@ -55,6 +55,39 @@ class TodoDatabase:
                         last_attempt_at TEXT NOT NULL
                     )
                 ''')
+
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS api_keys (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        key_hash TEXT UNIQUE NOT NULL,
+                        prefix TEXT NOT NULL,
+                        comment TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        last_used_at TIMESTAMP,
+                        use_count INTEGER NOT NULL DEFAULT 0,
+                        is_active INTEGER NOT NULL DEFAULT 1,
+                        is_legacy INTEGER NOT NULL DEFAULT 0
+                    )
+                ''')
+
+                cursor.execute('''
+                    CREATE TABLE IF NOT EXISTS print_events (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        key_id INTEGER,
+                        print_type TEXT NOT NULL,
+                        text TEXT NOT NULL,
+                        details TEXT,
+                        language TEXT,
+                        status TEXT NOT NULL,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                        FOREIGN KEY (key_id) REFERENCES api_keys(id)
+                    )
+                ''')
+
+                cursor.execute('''
+                    CREATE INDEX IF NOT EXISTS idx_print_events_key_created
+                    ON print_events(key_id, created_at)
+                ''')
                 
                 conn.commit()
                 conn.close()
@@ -255,14 +288,14 @@ class TodoDatabase:
                 # Count todos to be deleted
                 cursor.execute('''
                     SELECT COUNT(*) FROM todos 
-                    WHERE status IN ('pending', 'failed')
+                    WHERE print_status IN ('pending', 'failed')
                 ''')
                 count = cursor.fetchone()[0]
                 
                 # Delete pending and failed todos
                 cursor.execute('''
                     DELETE FROM todos 
-                    WHERE status IN ('pending', 'failed')
+                    WHERE print_status IN ('pending', 'failed')
                 ''')
                 
                 conn.commit()
@@ -402,3 +435,171 @@ class TodoDatabase:
             except Exception as e:
                 logger.error(f"Error resetting failed todos: {str(e)}")
                 return 0
+
+    def ensure_legacy_api_key(self, key_hash: str, prefix: str, comment: str):
+        with self.lock:
+            conn = sqlite3.connect(self.db_path)
+            try:
+                cursor = conn.cursor()
+                cursor.execute('UPDATE api_keys SET is_active = 0 WHERE is_legacy = 1')
+                cursor.execute('''
+                    INSERT INTO api_keys (key_hash, prefix, comment, is_active, is_legacy)
+                    VALUES (?, ?, ?, 1, 1)
+                    ON CONFLICT(key_hash) DO UPDATE SET
+                        prefix = excluded.prefix,
+                        comment = excluded.comment,
+                        is_active = 1,
+                        is_legacy = 1
+                ''', (key_hash, prefix, comment))
+                conn.commit()
+            finally:
+                conn.close()
+
+    def create_api_key(self, key_hash: str, prefix: str, comment: str) -> int:
+        with self.lock:
+            conn = sqlite3.connect(self.db_path)
+            try:
+                cursor = conn.cursor()
+                cursor.execute('''
+                    INSERT INTO api_keys (key_hash, prefix, comment)
+                    VALUES (?, ?, ?)
+                ''', (key_hash, prefix, comment))
+                key_id = cursor.lastrowid
+                conn.commit()
+                return key_id
+            finally:
+                conn.close()
+
+    def get_api_key_by_hash(self, key_hash: str) -> Optional[Dict]:
+        with self.lock:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            try:
+                row = conn.execute('''
+                    SELECT id, prefix, comment, is_legacy
+                    FROM api_keys
+                    WHERE key_hash = ? AND is_active = 1
+                ''', (key_hash,)).fetchone()
+                return dict(row) if row else None
+            finally:
+                conn.close()
+
+    def has_active_api_keys(self) -> bool:
+        with self.lock:
+            conn = sqlite3.connect(self.db_path)
+            try:
+                count = conn.execute('SELECT COUNT(*) FROM api_keys WHERE is_active = 1').fetchone()[0]
+                return count > 0
+            finally:
+                conn.close()
+
+    def record_api_key_usage(self, key_id: int):
+        with self.lock:
+            conn = sqlite3.connect(self.db_path)
+            try:
+                conn.execute('''
+                    UPDATE api_keys
+                    SET use_count = use_count + 1,
+                        last_used_at = CURRENT_TIMESTAMP
+                    WHERE id = ?
+                ''', (key_id,))
+                conn.commit()
+            finally:
+                conn.close()
+
+    def revoke_api_key(self, key_id: int) -> bool:
+        with self.lock:
+            conn = sqlite3.connect(self.db_path)
+            try:
+                cursor = conn.execute('''
+                    UPDATE api_keys
+                    SET is_active = 0
+                    WHERE id = ? AND is_legacy = 0 AND is_active = 1
+                ''', (key_id,))
+                conn.commit()
+                return cursor.rowcount > 0
+            finally:
+                conn.close()
+
+    def get_api_keys(self) -> List[Dict]:
+        with self.lock:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            try:
+                rows = conn.execute('''
+                    SELECT k.id, k.prefix, k.comment, k.created_at, k.last_used_at,
+                           k.use_count, k.is_active, k.is_legacy,
+                           COUNT(e.id) AS print_count
+                    FROM api_keys k
+                    LEFT JOIN print_events e ON e.key_id = k.id
+                    GROUP BY k.id
+                    ORDER BY k.is_active DESC, k.created_at DESC
+                ''').fetchall()
+                keys = []
+                for row in rows:
+                    key = dict(row)
+                    key['is_active'] = bool(key['is_active'])
+                    key['is_legacy'] = bool(key['is_legacy'])
+                    type_rows = conn.execute('''
+                        SELECT print_type, COUNT(*) AS count
+                        FROM print_events
+                        WHERE key_id = ?
+                        GROUP BY print_type
+                    ''', (key['id'],)).fetchall()
+                    key['type_counts'] = {row['print_type']: row['count'] for row in type_rows}
+                    keys.append(key)
+                return keys
+            finally:
+                conn.close()
+
+    def add_print_event(self, key_id: Optional[int], print_type: str, text: str,
+                        details: Dict, language: str, status: str):
+        safe_details = {
+            key: value for key, value in details.items()
+            if key in {'title', 'author', 'qr_size'}
+        }
+        with self.lock:
+            conn = sqlite3.connect(self.db_path)
+            try:
+                conn.execute('''
+                    INSERT INTO print_events (key_id, print_type, text, details, language, status)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                ''', (
+                    key_id,
+                    print_type,
+                    text,
+                    json.dumps(safe_details),
+                    language,
+                    status,
+                ))
+                conn.commit()
+            finally:
+                conn.close()
+
+    def get_print_events(self, limit: int = 100, key_id: Optional[int] = None) -> List[Dict]:
+        limit = min(200, max(1, int(limit)))
+        with self.lock:
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            try:
+                query = '''
+                    SELECT e.id, e.print_type, e.text, e.details, e.language,
+                           e.status, e.created_at, k.comment AS key_comment,
+                           k.prefix AS key_prefix
+                    FROM print_events e
+                    LEFT JOIN api_keys k ON k.id = e.key_id
+                '''
+                parameters = []
+                if key_id is not None:
+                    query += ' WHERE e.key_id = ?'
+                    parameters.append(key_id)
+                query += ' ORDER BY e.created_at DESC, e.id DESC LIMIT ?'
+                parameters.append(limit)
+                events = []
+                for row in conn.execute(query, parameters).fetchall():
+                    event = dict(row)
+                    event['details'] = json.loads(event['details']) if event['details'] else {}
+                    events.append(event)
+                return events
+            finally:
+                conn.close()

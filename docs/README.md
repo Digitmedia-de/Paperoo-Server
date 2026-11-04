@@ -70,6 +70,14 @@ QR-Codes akzeptieren `qr_size` mit Werten von 1 bis 16. Der Standard ist 8; ung�
 
 Alle schreibenden Endpunkte benötigen eine Websession und `X-CSRF-Token`. Bei aktivem Passwortschutz verlangt die Änderung der Zugangseinstellungen zusätzlich `current_password`. API- und MQTT-Schlüssel werden in Antworten nicht ausgegeben; ein leeres Feld behält den bisherigen Wert. Der separate Bereich ist unter `/settings` erreichbar.
 
+### API-Schlüssel und Druckprotokoll
+- `GET /api/settings/api-keys` - Schlüssel mit Kommentar, Nutzungszahlen, Typstatistik und letzter Verwendung lesen
+- `POST /api/settings/api-keys` - neuen Schlüssel mit `comment` erstellen; der Klartextschlüssel wird nur in dieser Antwort zurückgegeben
+- `DELETE /api/settings/api-keys/<id>` - benutzerdefinierten Schlüssel deaktivieren; der Standard-Schlüssel aus `.env` ist geschützt
+- `GET /api/settings/print-log` - Druckprotokoll lesen, optional mit `key_id` und `limit` (maximal 200)
+
+Schreibende Endpunkte benötigen Websession und `X-CSRF-Token`. Gespeichert werden nur SHA-256-Hashes und Präfixe der Schlüssel. Das Protokoll enthält Text, Titel/Autor/QR-Größe und Annahmestatus, aber keine Bilddaten oder Schlüssel. Statistik und Protokoll beginnen mit der Einführung dieser Funktion und enthalten keine rückwirkende Zuordnung alter Aufträge.
+
 ### Systemupdates
 - `GET /api/system/update/status` - installierte Version und letzten Update-Job lesen
 - `POST /api/system/update/check` - lokale Version und Commits mit `origin/main` vergleichen
@@ -82,6 +90,9 @@ Die POST-Endpunkte benötigen Websession und `X-CSRF-Token`. Auf der Kommandozei
 - `GET /api/queue/todos` - Letzte Aufgaben
 - `GET /api/queue/pending` - Wartende Aufgaben
 - `POST /api/queue/retry` - Fehlgeschlagene wiederholen
+- `POST /api/queue/clear` - Ausstehende und fehlgeschlagene Aufträge löschen
+
+Diese Endpunkte akzeptieren API-Keys oder Websessions. Schreibende Browseraufrufe benötigen weiterhin `X-CSRF-Token`; native Clients authentifizieren sich ausschließlich mit API-Key.
 
 ### Status
 - `GET /api/status` - System- und Druckerstatus
@@ -179,6 +190,9 @@ print(response.json())
 ```
 
 ## 📝 Änderungsprotokoll
+
+### Version 1.0.8
+- Versionsnummer erhöht. Details zu den enthaltenen Änderungen stehen in `CHANGELOG.md`.
 
 ### Version 1.0.7
 - Separater Einstellungen-Bereich `/settings` für Zugang, Drucker, KI, MQTT und Updates

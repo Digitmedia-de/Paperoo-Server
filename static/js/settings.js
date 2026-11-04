@@ -101,6 +101,164 @@
         }
     }
 
+    let managedApiKeys = [];
+
+    function formatDate(value) {
+        if (!value) return t.api_key_never_used;
+        const date = new Date(`${value}Z`);
+        return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+    }
+
+    async function loadApiKeys() {
+        try {
+            const result = await api('/api/settings/api-keys');
+            managedApiKeys = result.data;
+            const selectedFilter = $('logKeyFilter').value;
+            $('logKeyFilter').innerHTML = '';
+            const allOption = document.createElement('option');
+            allOption.value = '';
+            allOption.textContent = t.all_api_keys;
+            $('logKeyFilter').appendChild(allOption);
+            for (const key of managedApiKeys) {
+                const option = document.createElement('option');
+                option.value = key.id;
+                option.textContent = key.comment;
+                option.selected = String(key.id) === selectedFilter;
+                $('logKeyFilter').appendChild(option);
+            }
+
+            $('apiKeysList').innerHTML = '';
+            if (!managedApiKeys.length) {
+                $('apiKeysList').textContent = t.no_api_keys;
+                return;
+            }
+            for (const key of managedApiKeys) {
+                const card = document.createElement('div');
+                card.className = `api-key-card${key.is_active ? '' : ' revoked'}`;
+                const status = key.is_legacy ? t.api_key_legacy : (key.is_active ? t.api_key_active : t.api_key_revoked);
+                const typeCounts = Object.entries(key.type_counts)
+                    .map(([type, count]) => `<span class="type-count">${escapeHtml(t[`type_${type}`] || type)}: ${count}</span>`)
+                    .join('');
+                card.innerHTML = `
+                    <div class="api-key-header">
+                        <div><strong>${escapeHtml(key.comment)}</strong><div class="text-muted"><code>${escapeHtml(key.prefix)}…</code> · ${escapeHtml(status)}</div></div>
+                        ${key.is_legacy || !key.is_active ? '' : `<button type="button" class="btn btn-sm btn-danger" data-revoke-key="${key.id}">${escapeHtml(t.revoke_api_key)}</button>`}
+                    </div>
+                    <div class="api-key-stats">
+                        <div class="api-key-stat"><strong>${key.use_count}</strong><span>${escapeHtml(t.api_key_usage)}</span></div>
+                        <div class="api-key-stat"><strong>${key.print_count}</strong><span>${escapeHtml(t.api_key_prints)}</span></div>
+                    </div>
+                    <div class="type-counts">${typeCounts}</div>
+                    <small class="d-block mt-2 text-muted">${escapeHtml(t.api_key_last_used)}: ${escapeHtml(formatDate(key.last_used_at))}</small>
+                `;
+                $('apiKeysList').appendChild(card);
+            }
+        } catch (error) {
+            showAlert(error.message, 'danger');
+        }
+    }
+
+    $('apiKeyForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        setBusy(event.target, true);
+        try {
+            const result = await api('/api/settings/api-keys', {
+                method: 'POST',
+                body: JSON.stringify({ comment: $('apiKeyComment').value }),
+            });
+            $('newApiKeyValue').textContent = result.data.api_key;
+            $('newApiKeyContainer').hidden = false;
+            $('apiKeyComment').value = '';
+            await loadApiKeys();
+        } catch (error) {
+            showAlert(error.message || t.api_key_create_failed, 'danger');
+        } finally {
+            setBusy(event.target, false);
+        }
+    });
+
+    $('copyApiKeyBtn').addEventListener('click', async () => {
+        const value = $('newApiKeyValue').textContent;
+        try {
+            await navigator.clipboard.writeText(value);
+        } catch {
+            const textarea = document.createElement('textarea');
+            textarea.value = value;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            textarea.remove();
+        }
+        showAlert(t.api_key_copied);
+    });
+
+    $('apiKeysList').addEventListener('click', async (event) => {
+        const button = event.target.closest('button[data-revoke-key]');
+        if (!button || !window.confirm(t.confirm_revoke_api_key)) return;
+        button.disabled = true;
+        try {
+            await api(`/api/settings/api-keys/${button.dataset.revokeKey}`, { method: 'DELETE' });
+            await loadApiKeys();
+            await loadPrintLog();
+        } catch (error) {
+            showAlert(error.message || t.api_key_revoke_failed, 'danger');
+            button.disabled = false;
+        }
+    });
+
+    async function loadPrintLog() {
+        try {
+            const filter = $('logKeyFilter').value;
+            const result = await api(`/api/settings/print-log${filter ? `?key_id=${encodeURIComponent(filter)}` : ''}`);
+            $('printLogBody').innerHTML = '';
+            if (!result.data.length) {
+                const row = document.createElement('tr');
+                const cell = document.createElement('td');
+                cell.colSpan = 5;
+                cell.textContent = t.no_print_log;
+                row.appendChild(cell);
+                $('printLogBody').appendChild(row);
+                return;
+            }
+            for (const event of result.data) {
+                const row = document.createElement('tr');
+                const values = [
+                    formatDate(event.created_at),
+                    event.key_comment || '–',
+                    t[`type_${event.print_type}`] || event.print_type,
+                ];
+                for (const value of values) {
+                    const cell = document.createElement('td');
+                    cell.textContent = value;
+                    row.appendChild(cell);
+                }
+                const content = document.createElement('td');
+                content.className = 'log-content';
+                content.textContent = event.text;
+                const details = [];
+                if (event.details.title) details.push(event.details.title);
+                if (event.details.author) details.push(event.details.author);
+                if (event.details.qr_size) details.push(`${t.qr_size}: ${event.details.qr_size}`);
+                if (details.length) {
+                    const small = document.createElement('small');
+                    small.className = 'd-block text-muted';
+                    small.textContent = details.join(' · ');
+                    content.appendChild(small);
+                }
+                row.appendChild(content);
+                const status = document.createElement('td');
+                status.textContent = event.status === 'printed' ? t.log_printed : t.log_queued;
+                row.appendChild(status);
+                $('printLogBody').appendChild(row);
+            }
+        } catch (error) {
+            showAlert(error.message, 'danger');
+        }
+    }
+
+    $('refreshLogBtn').addEventListener('click', loadPrintLog);
+    $('logKeyFilter').addEventListener('change', loadPrintLog);
+
     $('authEnabled').addEventListener('change', () => {
         $('currentPasswordGroup').hidden = !$('authEnabled').checked || !settings.auth.enabled;
     });
@@ -313,5 +471,7 @@
     }).catch(showUpdateError);
 
     loadSettings();
+    loadApiKeys();
+    loadPrintLog();
     loadPrinters();
 })();

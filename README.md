@@ -7,6 +7,7 @@ An intelligent task manager with receipt printer functionality. Print your tasks
 - 🖨️ **Direct printing** on receipt/POS printers (USB, Serial, Network)
 - 🌐 **Modern web interface** with responsive design
 - 📱 **REST API** with Bearer Token authentication
+- 🔑 **Multiple API keys** with comments, usage statistics and per-key print logs
 - 🔐 **Web authentication** with session management and IP whitelist
 - 🌍 **Multilingual** (German/English) - controllable via API
 - ⭐ **5-level priority system** for tasks
@@ -172,6 +173,12 @@ Authorization: Bearer your-api-key
 X-API-Key: your-api-key
 ```
 
+### Managing API Keys
+
+Open **Settings → API Keys** to create additional keys with a comment. A new key is displayed only once; copy it immediately. Only its SHA-256 hash and prefix are stored. Custom keys can be revoked without losing their statistics, while the legacy `API_KEY` from `.env` remains active and cannot be revoked through the UI.
+
+Each key shows successful API uses, last-used time and accepted print jobs grouped by type. **Settings → Print Log** shows timestamp, key comment, print type, text or image caption, optional details and acceptance status. Image payloads and API secrets are never logged. Statistics start with this feature and do not assign older jobs retroactively.
+
 ### Main Endpoints
 
 #### Print Task
@@ -224,7 +231,7 @@ curl -X GET http://localhost:5001/api/status \
 #### Queue Status
 `GET /api/queue/status`
 
-Returns statistics about printed, pending, and failed tasks.
+Returns statistics about printed, pending, and failed tasks. Queue reads and mutations accept either an API key or a web session; browser mutations still require CSRF. Native clients can also retry failed jobs with `POST /api/queue/retry` and clear pending/failed jobs with `POST /api/queue/clear`.
 
 #### Retry Failed
 `POST /api/queue/retry`
