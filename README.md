@@ -10,19 +10,21 @@ An intelligent task manager with receipt printer functionality. Print your tasks
 - 🔐 **Web authentication** with session management and IP whitelist
 - 🌍 **Multilingual** (German/English) - controllable via API
 - ⭐ **5-level priority system** for tasks
-- 🤖 **AI-powered motivational quotes** (OpenAI integration)
+- 🤖 **AI-powered motivational quotes** (OpenAI, Anthropic, OpenRouter or local LLM)
+- 🧾 **Multiple print types** (todo, shopping list, note, quote, image, QR code and task receipt)
 - 📊 **Queue management** with automatic retry
 - 🔌 **MQTT integration** for printer power management
 - ⏱️ **Automatic timeout management**
 - 🔄 **Hot-reload** of configuration (.env changes)
 - 📈 **Statistics** and queue monitoring
+- ⬆️ **GitHub updates** with version check, backup and web interface
 
 ## 🚀 Quick Installation
 
 ### Prerequisites
 
 - Linux (Debian 11+, Ubuntu 20.04+) or macOS
-- Python 3.9 or higher
+- Python 3.11 or higher
 - Git
 
 ### Installation with Script
@@ -131,10 +133,20 @@ WEB_SESSION_TIMEOUT=1440  # minutes
 WEB_IP_WHITELIST_ENABLED=true
 WEB_IP_WHITELIST=192.168.0.0/16,10.0.0.0/8
 
-# OpenAI for motivational quotes (optional)
-OPENAI_API_KEY=sk-...
+# Motivational quotes (optional)
 MOTIVATION_ENABLED=true
-MOTIVATION_MODEL=gpt-4o-mini
+MOTIVATION_PROVIDER=openai  # openai, anthropic, openrouter or local
+OPENAI_API_KEY=sk-...
+OPENAI_BASE_URL=https://api.openai.com/v1/chat/completions
+OPENAI_MODEL=gpt-4o-mini
+ANTHROPIC_API_KEY=
+ANTHROPIC_BASE_URL=https://api.anthropic.com/v1/messages
+ANTHROPIC_MODEL=claude-3-5-haiku-latest
+OPENROUTER_API_KEY=
+OPENROUTER_BASE_URL=https://openrouter.ai/api/v1/chat/completions
+OPENROUTER_MODEL=openai/gpt-4o-mini
+LOCAL_BASE_URL=http://localhost:11434/v1/chat/completions
+LOCAL_MODEL=llama3.2
 
 # MQTT (optional)
 MQTT_ENABLED=false
@@ -177,9 +189,15 @@ curl -X POST http://localhost:5001/api/print \
 ```
 
 **Parameters:**
-- `text` (string, required): Task text
+- `text` (string, required except for images): Task text, newline-separated items or QR payload; optional image caption
+- `type` (string): `todo` (default), `list`, `note`, `quote`, `image`, `qr` or `receipt`; unknown values fall back to `todo`
+- `title` / `list_name` (string): Optional shopping-list title
+- `author` (string): Optional quote author
+- `image` (string): Base64-encoded image or data URL (required for `image`)
 - `priority` (integer, 1-5): Priority (default: 3)
 - `language` (string): Language for printout ("de" or "en")
+
+Images are resized to `PRINT_IMAGE_WIDTH` (default: 384 pixels) and converted to black and white. Wi-Fi QR codes use the standard payload format `WIFI:T:WPA;S:<SSID>;P:<Password>;;`.
 
 **Response:**
 ```json
@@ -233,6 +251,27 @@ With authentication:
 1. Login at `/login`
 2. Session stays active for 24 hours (configurable)
 3. "Remember Me" option for 30 days
+
+## ⬆️ System Updates
+
+Use **Settings → System Update** to compare the installed version and commit with `origin/main` and install available updates. The same operations are available on the command line:
+
+```bash
+./update.sh --check
+./update.sh --install
+```
+
+The updater requires the `main` branch, a clean working tree and a fast-forward from `origin/main`. It backs up `.env` and `todos.db` to `backups/`, installs `requirements.txt`, checks dependencies and Python syntax, runs `modules/migrate.py` when present and restarts the `paperoo` service. Failures after the pull reset the code to the previous commit. Job status is written to `logs/update-status.json`.
+
+For a manual installation without a service restart, use `./update.sh --install --no-restart`.
+
+The service user needs permission for exactly this restart command. Add the following through `sudo visudo -f /etc/sudoers.d/paperoo-update`, replacing `YOUR_USERNAME` and the `systemctl` path if necessary:
+
+```sudoers
+YOUR_USERNAME ALL=(root) NOPASSWD: /usr/bin/systemctl restart paperoo
+```
+
+The update is started by the web process in the background. The UI becomes briefly unavailable during the restart and resumes displaying the job status afterward.
 
 ## 🖨️ Supported Printers
 

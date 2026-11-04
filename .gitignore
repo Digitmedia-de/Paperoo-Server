@@ -29,6 +29,9 @@ Thumbs.db
 *.log
 logs/
 
+# Update backups
+backups/
+
 # Testing
 .pytest_cache/
 .coverage

@@ -53,15 +53,15 @@ class PrintQueueManager:
                     
                     # Try to print
                     logger.info(f"Attempting to print todo #{todo['id']} (attempt {todo['print_attempts'] + 1})")
-                    # Get language from metadata if available
-                    language = None
-                    if todo.get('metadata'):
+                    metadata = todo.get('metadata') or {}
+                    if isinstance(metadata, str):
                         import json
                         try:
-                            metadata = json.loads(todo['metadata'])
-                            language = metadata.get('language')
-                        except:
-                            pass
+                            metadata = json.loads(metadata)
+                        except (TypeError, ValueError):
+                            metadata = {}
+                    language = metadata.get('language')
+                    print_type = metadata.get('type', 'todo')
                     
                     # Mark as retry if this has been attempted before
                     is_retry = todo['print_attempts'] > 0
@@ -71,7 +71,9 @@ class PrintQueueManager:
                         todo['priority'],
                         self.mqtt_handler,
                         language=language,
-                        is_retry=is_retry
+                        is_retry=is_retry,
+                        print_type=print_type,
+                        metadata=metadata
                     )
                     
                     if success:
@@ -96,17 +98,22 @@ class PrintQueueManager:
         try:
             # Add to database
             todo_id = self.db.add_todo(text, priority, metadata)
+            metadata = metadata or {}
+            language = metadata.get('language')
+            print_type = metadata.get('type', 'todo')
             
-            # Try to print immediately with language from metadata
-            language = None
-            if metadata and 'language' in metadata:
-                language = metadata.get('language')
-            
-            success, message = self.printer_manager.print_todo(text, priority, self.mqtt_handler, language=language)
+            success, message = self.printer_manager.print_todo(
+                text,
+                priority,
+                self.mqtt_handler,
+                language=language,
+                print_type=print_type,
+                metadata=metadata
+            )
             
             if success:
                 self.db.mark_as_printed(todo_id)
-                return True, "ToDo printed successfully", todo_id
+                return True, message, todo_id
             else:
                 self.db.mark_as_failed(todo_id, message)
                 return False, f"Saved to queue for retry: {message}", todo_id

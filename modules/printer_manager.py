@@ -1,7 +1,10 @@
 import os
 import time
 import threading
+import base64
 from datetime import datetime, timedelta
+from io import BytesIO
+from PIL import Image
 from escpos.printer import Usb, Serial, Network
 from escpos.exceptions import Error as EscposError
 import logging
@@ -23,9 +26,7 @@ class PrinterManager:
         
         # Initialize motivation generator if enabled
         if config.get('MOTIVATION_ENABLED', 'false').lower() == 'true':
-            api_key = config.get('OPENAI_API_KEY', '')
-            model = config.get('MOTIVATION_MODEL', 'gpt-4o-mini')
-            self.motivation_generator = MotivationGenerator(api_key, model, self.language)
+            self.motivation_generator = MotivationGenerator(config, self.language)
         else:
             self.motivation_generator = None
         
@@ -113,15 +114,17 @@ class PrinterManager:
             self.printer = None  # Reset printer on error
             return False
     
-    def print_todo(self, text, priority, mqtt_handler=None, language=None, is_retry=False):
-        """Print a ToDo item with optional language override
+    def print_todo(self, text, priority, mqtt_handler=None, language=None, is_retry=False, print_type='todo', metadata=None):
+        """Print an item with optional language and type-specific formatting
         
         Args:
-            text: The todo text to print
+            text: The text or QR payload to print
             priority: Priority level (1-5)
             mqtt_handler: MQTT handler instance
             language: Optional language override
             is_retry: True if this is a retry attempt (forces MQTT before_print)
+            print_type: One of todo, list, note, quote, image, qr or receipt
+            metadata: Type-specific values such as title, author or image data
         """
         with self.lock:
             # Handle MQTT BEFORE any printing attempt
@@ -177,8 +180,7 @@ class PrinterManager:
                         self._setup_mqtt_timeout(mqtt_handler)
                         return False, "Printer initialization failed. Please check printer connection and configuration."
                 
-                # Format and print the ToDo with language override
-                self._format_and_print(text, priority, language)
+                self._print_by_type(print_type, text, priority, language, metadata)
                 
                 # Update last print time
                 self.last_print_time = datetime.now()
@@ -186,7 +188,9 @@ class PrinterManager:
                 # Set up timeout timer for MQTT
                 self._setup_mqtt_timeout(mqtt_handler)
                 
-                return True, "ToDo printed successfully"
+                if print_type == 'todo':
+                    return True, "ToDo printed successfully"
+                return True, f"{print_type} printed successfully"
                 
             except Exception as e:
                 error_msg = str(e)
@@ -217,6 +221,120 @@ class PrinterManager:
             )
             self.timeout_timer.start()
     
+    def _print_by_type(self, print_type, text, priority, language=None, metadata=None):
+        metadata = metadata or {}
+        if print_type == 'list':
+            self._format_list(text, language, metadata)
+        elif print_type == 'note':
+            self._format_note(text, language)
+        elif print_type == 'quote':
+            self._format_quote(text, language, metadata)
+        elif print_type == 'image':
+            self._format_image(text, metadata)
+        elif print_type == 'qr':
+            self._format_qr(text)
+        elif print_type == 'receipt':
+            self._format_receipt(text, language)
+        else:
+            self._format_and_print(text, priority, language)
+
+    def _start_receipt(self):
+        try:
+            self.printer.charcode('CP858')
+        except Exception:
+            pass
+        self.printer.text("\n")
+
+    def _finish_receipt(self):
+        self.printer.text("\n\n")
+        self.printer.cut()
+
+    def _print_title(self, title):
+        self.printer.set(align='center', font='a', width=1, height=1, bold=True)
+        self.printer.text(f"{title}\n")
+        self.printer.set(align='center', font='a', width=1, height=1, bold=False)
+        self.printer.text(datetime.now().strftime("%Y-%m-%d %H:%M:%S") + "\n")
+        self.printer.text("-" * 32 + "\n\n")
+
+    def _print_items(self, items, marker):
+        self.printer.set(align='left', font='a', width=1, height=1, bold=False)
+        for item in items:
+            for line in self._wrap_text_centered(f"{marker} {item}", 32):
+                self.printer.text(line + "\n")
+            self.printer.text("\n")
+
+    def _format_list(self, text, language, metadata):
+        lang = language or self.language
+        self._start_receipt()
+        title = metadata.get('title') or get_translation(lang, 'receipt_list_title', 'Shopping List')
+        self._print_title(title)
+        items = [line.strip() for line in text.splitlines() if line.strip()]
+        self._print_items(items, '[ ]')
+        self._finish_receipt()
+
+    def _format_note(self, text, language):
+        lang = language or self.language
+        self._start_receipt()
+        self._print_title(get_translation(lang, 'receipt_note_title', 'Note'))
+        self.printer.set(align='left', font='a', width=1, height=1, bold=False)
+        for paragraph in text.splitlines():
+            if not paragraph.strip():
+                self.printer.text("\n")
+                continue
+            for line in self._wrap_text_centered(paragraph, 32):
+                self.printer.text(line + "\n")
+        self._finish_receipt()
+
+    def _format_quote(self, text, language, metadata):
+        self._start_receipt()
+        self.printer.set(align='center', font='a', width=1, height=1, bold=False)
+        for line in self._wrap_text_centered(text, 30):
+            self.printer.text(line + "\n")
+        author = metadata.get('author', '').strip()
+        if author:
+            self.printer.text(f"\n- {author}\n")
+        self._finish_receipt()
+
+    def _format_receipt(self, text, language):
+        lang = language or self.language
+        self._start_receipt()
+        self._print_title(get_translation(lang, 'receipt_tasks_title', 'Completed Tasks'))
+        items = [line.strip() for line in text.splitlines() if line.strip()]
+        self._print_items(items, '[x]')
+        self.printer.text("-" * 32 + "\n")
+        total_label = get_translation(lang, 'receipt_total', 'Total')
+        self.printer.set(align='right', font='a', width=1, height=1, bold=True)
+        self.printer.text(f"{total_label}: {len(items)}\n")
+        self._finish_receipt()
+
+    def _format_image(self, text, metadata):
+        image_data = metadata.get('image', '')
+        if image_data.startswith('data:'):
+            image_data = image_data.split(',', 1)[1]
+        image_bytes = base64.b64decode(image_data, validate=True)
+
+        self._start_receipt()
+        if text.strip():
+            self.printer.set(align='center', font='a', width=1, height=1, bold=True)
+            for line in self._wrap_text_centered(text, 30):
+                self.printer.text(line + "\n")
+            self.printer.text("\n")
+
+        with Image.open(BytesIO(image_bytes)) as source:
+            source.load()
+            image = source.convert('L')
+            width = max(1, int(self.config.get('PRINT_IMAGE_WIDTH', 384)))
+            image.thumbnail((width, 10000))
+            image = image.convert('1')
+            self.printer.image(image)
+        self._finish_receipt()
+
+    def _format_qr(self, text):
+        self._start_receipt()
+        self.printer.set(align='center')
+        self.printer.qr(text)
+        self._finish_receipt()
+
     def _format_and_print(self, text, priority, language=None):
         """Format and send ToDo to printer with optional language override"""
         try:

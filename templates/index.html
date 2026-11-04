@@ -211,6 +211,50 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="main-card mt-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">{{ t.motivation_settings }}</h3>
+                            <p class="card-subtitle">{{ t.motivation_subtitle }}</p>
+                        </div>
+                        <div class="card-body">
+                            <form id="motivationForm">
+                                <div class="form-group">
+                                    <label for="motivationProvider" class="form-label">{{ t.motivation_provider }}</label>
+                                    <select class="form-control" id="motivationProvider">
+                                        <option value="openai" {{ 'selected' if motivation_provider == 'openai' else '' }}>OpenAI</option>
+                                        <option value="anthropic" {{ 'selected' if motivation_provider == 'anthropic' else '' }}>Anthropic</option>
+                                        <option value="openrouter" {{ 'selected' if motivation_provider == 'openrouter' else '' }}>OpenRouter</option>
+                                        <option value="local" {{ 'selected' if motivation_provider == 'local' else '' }}>{{ t.motivation_local }}</option>
+                                    </select>
+                                </div>
+                                <div class="form-check mb-3">
+                                    <input class="form-check-input" type="checkbox" id="motivationEnabled" {{ 'checked' if motivation_enabled else '' }}>
+                                    <label class="form-check-label" for="motivationEnabled">{{ t.enable_motivation }}</label>
+                                </div>
+                                <button type="submit" class="btn btn-primary" id="saveMotivationBtn">{{ t.save_settings }}</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="main-card mt-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h3 class="card-title">{{ t.system_update }}</h3>
+                            <p class="card-subtitle">{{ t.system_update_subtitle }}</p>
+                        </div>
+                        <div class="card-body">
+                            <p>{{ t.current_version }}: <strong id="currentVersion">{{ app_version }}</strong></p>
+                            <p>{{ t.github_version }}: <strong id="remoteVersion">–</strong></p>
+                            <p id="updateStatus" class="text-muted">{{ t.update_not_checked }}</p>
+                            <button type="button" class="btn btn-light" id="checkUpdateBtn">{{ t.check_updates }}</button>
+                            <button type="button" class="btn btn-primary" id="installUpdateBtn" disabled>{{ t.install_update }}</button>
+                            <small class="d-block mt-2 text-muted">{{ t.update_restart_notice }}</small>
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
     </div>
@@ -523,6 +567,121 @@
                 });
             });
             
+            $('#motivationForm').on('submit', function(e) {
+                e.preventDefault();
+                $('#saveMotivationBtn').prop('disabled', true);
+                $.ajax({
+                    url: '/api/settings/motivation',
+                    method: 'POST',
+                    contentType: 'application/json',
+                    headers: { 'X-CSRF-Token': '{{ csrf_token }}' },
+                    data: JSON.stringify({
+                        provider: $('#motivationProvider').val(),
+                        enabled: $('#motivationEnabled').is(':checked')
+                    }),
+                    success: function(response) {
+                        if (response.success) {
+                            showAlert(translations.motivation_saved, 'success');
+                        }
+                    },
+                    error: function(xhr) {
+                        const message = xhr.responseJSON && xhr.responseJSON.error
+                            ? xhr.responseJSON.error
+                            : translations.motivation_save_failed;
+                        showAlert(message, 'danger');
+                    },
+                    complete: function() {
+                        $('#saveMotivationBtn').prop('disabled', false);
+                    }
+                });
+            });
+
+            let updatePolling = null;
+
+            function showUpdateError(xhr) {
+                const message = xhr.responseJSON && xhr.responseJSON.error
+                    ? xhr.responseJSON.error
+                    : translations.update_check_failed;
+                $('#updateStatus').text(message).addClass('text-danger');
+                $('#checkUpdateBtn').prop('disabled', false);
+            }
+
+            function pollUpdateStatus() {
+                if (updatePolling) return;
+                updatePolling = setInterval(function() {
+                    $.ajax({
+                        url: '/api/system/update/status',
+                        method: 'GET',
+                        success: function(response) {
+                            const job = response.data.job;
+                            if (!job) return;
+                            $('#currentVersion').text(response.data.current_version);
+                            $('#updateStatus').text(job.message).removeClass('text-danger');
+                            if (!job.running) {
+                                clearInterval(updatePolling);
+                                updatePolling = null;
+                                $('#checkUpdateBtn').prop('disabled', false);
+                                if (job.status === 'success') {
+                                    $('#remoteVersion').text(response.data.current_version);
+                                    setTimeout(function() { location.reload(); }, 1500);
+                                }
+                            }
+                        }
+                    });
+                }, 2000);
+            }
+
+            $('#checkUpdateBtn').on('click', function() {
+                $('#checkUpdateBtn').prop('disabled', true);
+                $('#installUpdateBtn').prop('disabled', true);
+                $('#updateStatus').removeClass('text-danger').text(translations.checking_updates);
+                $.ajax({
+                    url: '/api/system/update/check',
+                    method: 'POST',
+                    headers: { 'X-CSRF-Token': '{{ csrf_token }}' },
+                    success: function(response) {
+                        $('#remoteVersion').text(response.remote_version);
+                        if (response.update_available && response.fast_forward_possible) {
+                            $('#updateStatus').text(translations.update_available);
+                            $('#installUpdateBtn').prop('disabled', false);
+                        } else if (!response.fast_forward_possible) {
+                            $('#updateStatus').text(translations.update_diverged);
+                        } else {
+                            $('#updateStatus').text(translations.up_to_date);
+                        }
+                    },
+                    error: showUpdateError,
+                    complete: function() {
+                        $('#checkUpdateBtn').prop('disabled', false);
+                    }
+                });
+            });
+
+            $('#installUpdateBtn').on('click', function() {
+                if (!confirm(translations.confirm_update)) return;
+                $('#installUpdateBtn').prop('disabled', true);
+                $('#checkUpdateBtn').prop('disabled', true);
+                $.ajax({
+                    url: '/api/system/update/install',
+                    method: 'POST',
+                    headers: { 'X-CSRF-Token': '{{ csrf_token }}' },
+                    success: function() {
+                        $('#updateStatus').text(translations.update_started);
+                        pollUpdateStatus();
+                    },
+                    error: showUpdateError
+                });
+            });
+
+            $.get('/api/system/update/status', function(response) {
+                if (response.data.job && response.data.job.running) {
+                    $('#updateStatus').text(response.data.job.message);
+                    $('#checkUpdateBtn').prop('disabled', true);
+                    $('#installUpdateBtn').prop('disabled', true);
+                    pollUpdateStatus();
+                }
+            });
+
             // Form submission
             $('#todoForm').on('submit', function(e) {
                 e.preventDefault();

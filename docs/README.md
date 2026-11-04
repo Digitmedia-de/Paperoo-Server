@@ -51,7 +51,19 @@ curl -X GET http://localhost:5001/api/status \
 ## 📋 Verfügbare Endpunkte
 
 ### Drucken
-- `POST /api/print` - Neue Aufgabe drucken
+- `POST /api/print` - To-do, Einkaufsliste, Notiz, Zitat, Bild, QR-Code oder Aufgabenquittung drucken
+
+Das optionale Feld `type` akzeptiert `todo` (Standard), `list`, `note`, `quote`, `image`, `qr` und `receipt`. Unbekannte Werte fallen auf `todo` zurück. Listen und Quittungen lesen ihre Einträge zeilenweise aus `text`; Zitate akzeptieren `author`, Listen `title` oder `list_name`. Bilder werden als Base64 in `image` übertragen und benötigen keinen `text`.
+
+### Einstellungen
+- `POST /api/settings/motivation` - KI-Anbieter und Aktivierung über die Weboberfläche einstellen (Websession und `X-CSRF-Token` erforderlich)
+
+### Systemupdates
+- `GET /api/system/update/status` - installierte Version und letzten Update-Job lesen
+- `POST /api/system/update/check` - lokale Version und Commits mit `origin/main` vergleichen
+- `POST /api/system/update/install` - Backup und Fast-forward-Update im Hintergrund starten
+
+Die POST-Endpunkte benötigen Websession und `X-CSRF-Token`. Auf der Kommandozeile stehen ebenfalls `./update.sh --check` und `./update.sh --install` zur Verfügung. `--install --no-restart` installiert ohne Service-Neustart.
 
 ### Warteschlange
 - `GET /api/queue/status` - Warteschlangen-Statistiken
@@ -155,6 +167,20 @@ print(response.json())
 ```
 
 ## 📝 Änderungsprotokoll
+
+### Version 1.0.5
+- Lokale und GitHub-Versionsprüfung über `update.sh`
+- Backup, Fast-forward-Update, Abhängigkeitsinstallation und Service-Neustart
+- Update-Bereich in der Weboberfläche mit Session- und CSRF-Schutz
+
+### Version 1.0.4
+- OpenAI, Anthropic, OpenRouter und lokale LLMs für Motivationssprüche
+- Anbieterwahl in der Weboberfläche
+- Aktualisierte Abhängigkeiten ohne bekannte `pip-audit`-Befunde; Python 3.11 oder neuer erforderlich
+
+### Version 1.0.3
+- Druck-Typen To-do, Einkaufsliste, Notiz, Zitat, Bild, QR-Code und Aufgabenquittung
+- Typ und Zusatzdaten werden auch bei Warteschlangen-Wiederholungen übernommen
 
 ### Version 1.0.2
 - Pauschale CORS-Freigabe entfernt

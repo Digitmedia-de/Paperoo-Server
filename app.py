@@ -1,5 +1,7 @@
 import os
+import json
 import logging
+import subprocess
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
 from dotenv import load_dotenv
 from modules.printer_manager import PrinterManager
@@ -31,7 +33,13 @@ logger = logging.getLogger(__name__)
 logging.getLogger('modules.mqtt_handler').setLevel(logging.INFO)
 logging.getLogger('modules.printer_manager').setLevel(logging.INFO)
 
-APP_VERSION = '1.0.2'
+APP_VERSION = '1.0.5'
+PRINT_TYPES = {'todo', 'list', 'note', 'quote', 'image', 'qr', 'receipt'}
+MOTIVATION_PROVIDERS = {'openai', 'anthropic', 'openrouter', 'local'}
+SERVER_ROOT = Path(__file__).resolve().parent
+UPDATE_SCRIPT = SERVER_ROOT / 'update.sh'
+UPDATE_STATUS_PATH = SERVER_ROOT / 'logs' / 'update-status.json'
+UPDATE_LOG_PATH = SERVER_ROOT / 'logs' / 'update-manual.log'
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -51,6 +59,7 @@ config = {
     'PRINTER_PRODUCT_ID': os.getenv('PRINTER_PRODUCT_ID', '0x0e15'),
     'PRINTER_SERIAL_PORT': os.getenv('PRINTER_SERIAL_PORT', '/dev/ttyUSB0'),
     'PRINTER_NETWORK_IP': os.getenv('PRINTER_NETWORK_IP', '192.168.1.100'),
+    'PRINT_IMAGE_WIDTH': os.getenv('PRINT_IMAGE_WIDTH', '384'),
     'MQTT_ENABLED': os.getenv('MQTT_ENABLED', 'false'),
     'MQTT_BROKER': os.getenv('MQTT_BROKER', 'localhost'),
     'MQTT_PORT': os.getenv('MQTT_PORT', '1883'),
@@ -62,9 +71,19 @@ config = {
     'MQTT_TIMEOUT_MINUTES': os.getenv('MQTT_TIMEOUT_MINUTES', '30'),
     'MQTT_TOPIC_AFTER_TIMEOUT': os.getenv('MQTT_TOPIC_AFTER_TIMEOUT', 'printer/after_timeout'),
     'MQTT_PAYLOAD_AFTER_TIMEOUT': os.getenv('MQTT_PAYLOAD_AFTER_TIMEOUT', '{"action": "power_off"}'),
-    'OPENAI_API_KEY': os.getenv('OPENAI_API_KEY', ''),
     'MOTIVATION_ENABLED': os.getenv('MOTIVATION_ENABLED', 'false'),
-    'MOTIVATION_MODEL': os.getenv('MOTIVATION_MODEL', 'gpt-4o-mini'),
+    'MOTIVATION_PROVIDER': os.getenv('MOTIVATION_PROVIDER', 'openai'),
+    'OPENAI_API_KEY': os.getenv('OPENAI_API_KEY', ''),
+    'OPENAI_BASE_URL': os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1/chat/completions'),
+    'OPENAI_MODEL': os.getenv('OPENAI_MODEL', os.getenv('MOTIVATION_MODEL', 'gpt-4o-mini')),
+    'ANTHROPIC_API_KEY': os.getenv('ANTHROPIC_API_KEY', ''),
+    'ANTHROPIC_BASE_URL': os.getenv('ANTHROPIC_BASE_URL', 'https://api.anthropic.com/v1/messages'),
+    'ANTHROPIC_MODEL': os.getenv('ANTHROPIC_MODEL', 'claude-3-5-haiku-latest'),
+    'OPENROUTER_API_KEY': os.getenv('OPENROUTER_API_KEY', ''),
+    'OPENROUTER_BASE_URL': os.getenv('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1/chat/completions'),
+    'OPENROUTER_MODEL': os.getenv('OPENROUTER_MODEL', 'openai/gpt-4o-mini'),
+    'LOCAL_BASE_URL': os.getenv('LOCAL_BASE_URL', 'http://localhost:11434/v1/chat/completions'),
+    'LOCAL_MODEL': os.getenv('LOCAL_MODEL', 'llama3.2'),
     'LANGUAGE': os.getenv('LANGUAGE', 'de'),
     'WEB_AUTH_ENABLED': os.getenv('WEB_AUTH_ENABLED', 'false'),
     'WEB_USERNAME': os.getenv('WEB_USERNAME', ''),
@@ -110,6 +129,7 @@ def reload_config():
             'PRINTER_PRODUCT_ID': os.getenv('PRINTER_PRODUCT_ID', '0x0e15'),
             'PRINTER_SERIAL_PORT': os.getenv('PRINTER_SERIAL_PORT', '/dev/ttyUSB0'),
             'PRINTER_NETWORK_IP': os.getenv('PRINTER_NETWORK_IP', '192.168.1.100'),
+            'PRINT_IMAGE_WIDTH': os.getenv('PRINT_IMAGE_WIDTH', '384'),
             'MQTT_ENABLED': os.getenv('MQTT_ENABLED', 'false'),
             'MQTT_BROKER': os.getenv('MQTT_BROKER', 'localhost'),
             'MQTT_PORT': os.getenv('MQTT_PORT', '1883'),
@@ -121,9 +141,19 @@ def reload_config():
             'MQTT_TIMEOUT_MINUTES': os.getenv('MQTT_TIMEOUT_MINUTES', '30'),
             'MQTT_TOPIC_AFTER_TIMEOUT': os.getenv('MQTT_TOPIC_AFTER_TIMEOUT', 'printer/after_timeout'),
             'MQTT_PAYLOAD_AFTER_TIMEOUT': os.getenv('MQTT_PAYLOAD_AFTER_TIMEOUT', '{"action": "power_off"}'),
-            'OPENAI_API_KEY': os.getenv('OPENAI_API_KEY', ''),
             'MOTIVATION_ENABLED': os.getenv('MOTIVATION_ENABLED', 'false'),
-            'MOTIVATION_MODEL': os.getenv('MOTIVATION_MODEL', 'gpt-4o-mini'),
+            'MOTIVATION_PROVIDER': os.getenv('MOTIVATION_PROVIDER', 'openai'),
+            'OPENAI_API_KEY': os.getenv('OPENAI_API_KEY', ''),
+            'OPENAI_BASE_URL': os.getenv('OPENAI_BASE_URL', 'https://api.openai.com/v1/chat/completions'),
+            'OPENAI_MODEL': os.getenv('OPENAI_MODEL', os.getenv('MOTIVATION_MODEL', 'gpt-4o-mini')),
+            'ANTHROPIC_API_KEY': os.getenv('ANTHROPIC_API_KEY', ''),
+            'ANTHROPIC_BASE_URL': os.getenv('ANTHROPIC_BASE_URL', 'https://api.anthropic.com/v1/messages'),
+            'ANTHROPIC_MODEL': os.getenv('ANTHROPIC_MODEL', 'claude-3-5-haiku-latest'),
+            'OPENROUTER_API_KEY': os.getenv('OPENROUTER_API_KEY', ''),
+            'OPENROUTER_BASE_URL': os.getenv('OPENROUTER_BASE_URL', 'https://openrouter.ai/api/v1/chat/completions'),
+            'OPENROUTER_MODEL': os.getenv('OPENROUTER_MODEL', 'openai/gpt-4o-mini'),
+            'LOCAL_BASE_URL': os.getenv('LOCAL_BASE_URL', 'http://localhost:11434/v1/chat/completions'),
+            'LOCAL_MODEL': os.getenv('LOCAL_MODEL', 'llama3.2'),
             'LANGUAGE': os.getenv('LANGUAGE', 'de'),
         }
         
@@ -149,8 +179,9 @@ def reload_config():
                     old_mqtt_handler.cleanup()
                 mqtt_handler = None
             
-            # Update queue manager with new MQTT handler
+            # Update queue manager with reinitialized managers
             if 'queue_manager' in globals():
+                queue_manager.printer_manager = printer_manager
                 queue_manager.mqtt_handler = mqtt_handler
             
             # Update auth manager
@@ -294,6 +325,8 @@ def index():
     return render_template('index.html', 
                          current_printer=current_printer, 
                          motivation_enabled=motivation_enabled,
+                         motivation_provider=config.get('MOTIVATION_PROVIDER', 'openai'),
+                         app_version=APP_VERSION,
                          language=language,
                          t=translations,
                          session_info=session_info,
@@ -336,7 +369,7 @@ def api_reload_config():
 @app.route('/api/print', methods=['POST'])
 @auth_manager.require_api_key
 def api_print_todo():
-    """API endpoint to print a ToDo"""
+    """API endpoint to print a document"""
     try:
         data = request.get_json()
         
@@ -348,15 +381,27 @@ def api_print_todo():
                 'message': 'Please provide JSON data with text and priority'
             }), 400
         
+        requested_type = data.get('type', 'todo')
+        print_type = requested_type.strip().lower() if isinstance(requested_type, str) else 'todo'
+        if print_type not in PRINT_TYPES:
+            print_type = 'todo'
         text = data.get('text', '').strip()
         priority = data.get('priority', 3)
         language = data.get('language', config.get('LANGUAGE', 'de'))  # Optional language parameter
+        image_data = data.get('image', '')
         
-        if not text:
+        if print_type == 'image':
+            if not isinstance(image_data, str) or not image_data.strip():
+                return jsonify({
+                    'success': False,
+                    'error': 'Image is required',
+                    'message': 'Please provide a base64-encoded image'
+                }), 400
+        elif not text:
             return jsonify({
                 'success': False,
                 'error': 'Text is required',
-                'message': 'Please provide the ToDo text'
+                'message': 'Please provide the text to print'
             }), 400
         
         # Validate language
@@ -371,35 +416,40 @@ def api_print_todo():
         except:
             priority = 3
         
-        # Add to queue and attempt to print with language metadata
-        success, message, todo_id = queue_manager.add_todo(text, priority, {'source': 'api', 'language': language})
-        
+        metadata = {'source': 'api', 'language': language, 'type': print_type}
+        title = data.get('title', data.get('list_name', ''))
+        if print_type == 'list' and isinstance(title, str) and title.strip():
+            metadata['title'] = title.strip()
+        author = data.get('author', '')
+        if print_type == 'quote' and isinstance(author, str) and author.strip():
+            metadata['author'] = author.strip()
+        if print_type == 'image':
+            metadata['image'] = image_data
+
+        success, message, todo_id = queue_manager.add_todo(text, priority, metadata)
+        response_data = {
+            'id': todo_id,
+            'text': text,
+            'priority': priority,
+            'language': language,
+            'type': print_type
+        }
+
         if success:
-            logger.info(f"ToDo printed successfully: {text[:50]}...")
+            logger.info(f"{print_type} printed successfully")
             return jsonify({
                 'success': True,
                 'message': message,
-                'data': {
-                    'id': todo_id,
-                    'text': text,
-                    'priority': priority,
-                    'language': language
-                }
+                'data': response_data
             }), 200
-        else:
-            # Still return success if saved to queue
-            logger.info(f"ToDo saved to queue: {message}")
-            return jsonify({
-                'success': True,
-                'message': message,
-                'data': {
-                    'id': todo_id,
-                    'text': text,
-                    'priority': priority,
-                    'language': language,
-                    'queued': True
-                }
-            }), 200
+
+        logger.info(f"{print_type} saved to queue: {message}")
+        response_data['queued'] = True
+        return jsonify({
+            'success': True,
+            'message': message,
+            'data': response_data
+        }), 200
             
     except Exception as e:
         logger.error(f"API error: {str(e)}")
@@ -573,6 +623,115 @@ def api_update_language():
             'success': False,
             'error': str(e)
         }), 500
+
+@app.route('/api/settings/motivation', methods=['POST'])
+@session_manager.require_auth
+@session_manager.require_csrf
+def api_update_motivation():
+    """Update the motivation provider and its enabled state"""
+    global printer_manager
+    try:
+        data = request.get_json(silent=True) or {}
+        provider = data.get('provider', config.get('MOTIVATION_PROVIDER', 'openai'))
+        enabled = data.get('enabled', config.get('MOTIVATION_ENABLED', 'false').lower() == 'true')
+        if provider not in MOTIVATION_PROVIDERS or not isinstance(enabled, bool):
+            return jsonify({
+                'success': False,
+                'error': 'Invalid motivation settings'
+            }), 400
+
+        from dotenv import set_key
+        set_key('.env', 'MOTIVATION_PROVIDER', provider)
+        set_key('.env', 'MOTIVATION_ENABLED', str(enabled).lower())
+        config['MOTIVATION_PROVIDER'] = provider
+        config['MOTIVATION_ENABLED'] = str(enabled).lower()
+        printer_manager = PrinterManager(config)
+        queue_manager.printer_manager = printer_manager
+
+        return jsonify({
+            'success': True,
+            'data': {
+                'provider': provider,
+                'enabled': enabled,
+                'generator_enabled': printer_manager.motivation_generator.is_enabled() if printer_manager.motivation_generator else False
+            }
+        })
+    except Exception as e:
+        logger.error(f"Error updating motivation settings: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+def read_update_status():
+    if not UPDATE_STATUS_PATH.exists():
+        return None
+    try:
+        return json.loads(UPDATE_STATUS_PATH.read_text())
+    except (OSError, ValueError):
+        return None
+
+@app.route('/api/system/update/status', methods=['GET'])
+@session_manager.require_auth
+def api_system_update_status():
+    return jsonify({
+        'success': True,
+        'data': {
+            'current_version': APP_VERSION,
+            'update_script_available': UPDATE_SCRIPT.is_file(),
+            'job': read_update_status()
+        }
+    })
+
+@app.route('/api/system/update/check', methods=['POST'])
+@session_manager.require_auth
+@session_manager.require_csrf
+def api_system_update_check():
+    try:
+        completed = subprocess.run(
+            [str(UPDATE_SCRIPT), '--check'],
+            cwd=SERVER_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        try:
+            result = json.loads(completed.stdout)
+        except ValueError:
+            result = {'success': False, 'error': 'Update check returned an invalid response'}
+        if completed.returncode != 0 or not result.get('success'):
+            return jsonify({
+                'success': False,
+                'error': result.get('error', 'Update check failed')
+            }), 502
+        return jsonify(result)
+    except subprocess.TimeoutExpired:
+        return jsonify({'success': False, 'error': 'Update check timed out'}), 504
+    except OSError as e:
+        logger.error(f"Could not start update check: {str(e)}")
+        return jsonify({'success': False, 'error': 'Could not start update check'}), 500
+
+@app.route('/api/system/update/install', methods=['POST'])
+@session_manager.require_auth
+@session_manager.require_csrf
+def api_system_update_install():
+    if (SERVER_ROOT / 'logs' / 'update.lock').exists():
+        return jsonify({'success': False, 'error': 'Another update is already running'}), 409
+    try:
+        UPDATE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+        with UPDATE_LOG_PATH.open('a') as update_log:
+            subprocess.Popen(
+                [str(UPDATE_SCRIPT), '--install'],
+                cwd=SERVER_ROOT,
+                stdout=update_log,
+                stderr=subprocess.STDOUT,
+                start_new_session=True,
+            )
+        return jsonify({'success': True, 'message': 'Update started'}), 202
+    except OSError as e:
+        logger.error(f"Could not start update: {str(e)}")
+        return jsonify({'success': False, 'error': 'Could not start update'}), 500
 
 @app.route('/print', methods=['POST'])
 @session_manager.require_auth
