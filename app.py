@@ -1,7 +1,6 @@
 import os
 import logging
 from flask import Flask, render_template, request, jsonify, session, redirect, url_for
-from flask_cors import CORS
 from dotenv import load_dotenv
 from modules.printer_manager import PrinterManager
 from modules.mqtt_handler import MQTTHandler
@@ -16,7 +15,6 @@ import threading
 import time
 from pathlib import Path
 from datetime import timedelta
-import secrets
 
 # Load environment variables
 load_dotenv()
@@ -33,16 +31,18 @@ logger = logging.getLogger(__name__)
 logging.getLogger('modules.mqtt_handler').setLevel(logging.INFO)
 logging.getLogger('modules.printer_manager').setLevel(logging.INFO)
 
+APP_VERSION = '1.0.2'
+
 # Initialize Flask app
 app = Flask(__name__)
-app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-production')
+secret_key = os.getenv('SECRET_KEY')
+if not secret_key:
+    raise RuntimeError('SECRET_KEY must be set in the environment or .env file')
+app.config['SECRET_KEY'] = secret_key
 app.config['SESSION_TYPE'] = 'filesystem'
 app.config['SESSION_COOKIE_HTTPONLY'] = True
 app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(days=30)
-
-# Enable CORS for API endpoints
-CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # Initialize components
 config = {
@@ -69,6 +69,7 @@ config = {
     'WEB_AUTH_ENABLED': os.getenv('WEB_AUTH_ENABLED', 'false'),
     'WEB_USERNAME': os.getenv('WEB_USERNAME', ''),
     'WEB_PASSWORD': os.getenv('WEB_PASSWORD', ''),
+    'WEB_PASSWORD_HASH': os.getenv('WEB_PASSWORD_HASH', ''),
     'WEB_SESSION_TIMEOUT': os.getenv('WEB_SESSION_TIMEOUT', '1440'),
     'WEB_REMEMBER_ME_DAYS': os.getenv('WEB_REMEMBER_ME_DAYS', '30'),
     'WEB_IP_WHITELIST_ENABLED': os.getenv('WEB_IP_WHITELIST_ENABLED', 'false'),
@@ -86,7 +87,7 @@ queue_manager = PrintQueueManager(todo_db, printer_manager, mqtt_handler)
 queue_manager.start()  # Start background queue processor
 
 # Initialize session manager
-session_manager = SessionManager(config)
+session_manager = SessionManager(config, todo_db)
 
 # File watcher for .env changes
 env_file_path = Path('.env')
@@ -246,10 +247,6 @@ def login():
                 error = translations.get('invalid_credentials', 'Invalid username or password')
                 logger.warning(f"Failed login attempt from {ip_address}")
     
-    # Generate CSRF token
-    if 'csrf_token' not in session:
-        session['csrf_token'] = secrets.token_hex(32)
-    
     return render_template('login.html',
                          error=error,
                          rate_limited=rate_limited,
@@ -257,7 +254,7 @@ def login():
                          show_username=bool(config.get('WEB_USERNAME')),
                          language=language,
                          t=translations,
-                         csrf_token=session['csrf_token'])
+                         csrf_token=session_manager.get_csrf_token())
 
 @app.route('/logout')
 def logout():
@@ -299,7 +296,8 @@ def index():
                          motivation_enabled=motivation_enabled,
                          language=language,
                          t=translations,
-                         session_info=session_info)
+                         session_info=session_info,
+                         csrf_token=session_manager.get_csrf_token())
 
 @app.route('/health')
 def health():
@@ -418,6 +416,7 @@ def api_status():
     return jsonify({
         'success': True,
         'data': {
+            'version': APP_VERSION,
             'printer_configured': printer_manager.printer is not None,
             'mqtt_enabled': config['MQTT_ENABLED'].lower() == 'true',
             'mqtt_connected': mqtt_handler.connected if mqtt_handler else False,
@@ -576,6 +575,8 @@ def api_update_language():
         }), 500
 
 @app.route('/print', methods=['POST'])
+@session_manager.require_auth
+@session_manager.require_csrf
 def web_print_todo():
     """Handle web form submission to print ToDo"""
     try:

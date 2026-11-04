@@ -35,10 +35,6 @@ class AuthManager:
             if not api_key:
                 api_key = request.headers.get('X-API-Key')
             
-            # Also check in query parameters as fallback
-            if not api_key:
-                api_key = request.args.get('api_key')
-            
             # Verify API key
             if not api_key:
                 return jsonify({

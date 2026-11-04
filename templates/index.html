@@ -549,7 +549,8 @@
                     method: 'POST',
                     data: {
                         text: text,
-                        priority: priority
+                        priority: priority,
+                        csrf_token: '{{ csrf_token }}'
                     },
                     success: function(response) {
                         if (response.success) {

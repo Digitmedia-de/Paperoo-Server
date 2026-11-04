@@ -185,7 +185,7 @@ if [ "$USE_VENV" != "false" ]; then
     $PIP_CMD install wheel 2>/dev/null || true
     $PIP_CMD install -r requirements.txt || {
         echo -e "${YELLOW}Some packages failed, installing one by one...${NC}"
-        for package in Flask flask-cors python-escpos pyserial paho-mqtt python-dotenv Werkzeug Pillow; do
+        for package in Flask python-escpos pyserial paho-mqtt python-dotenv Werkzeug Pillow; do
             $PIP_CMD install $package 2>/dev/null || true
         done
     }
@@ -195,7 +195,7 @@ else
     $PIP_CMD install --break-system-packages wheel 2>/dev/null || $PIP_CMD install wheel 2>/dev/null || true
     $PIP_CMD install --break-system-packages -r requirements.txt 2>/dev/null || $PIP_CMD install -r requirements.txt || {
         echo -e "${YELLOW}Installing packages individually...${NC}"
-        for package in Flask flask-cors python-escpos pyserial paho-mqtt python-dotenv Werkzeug Pillow; do
+        for package in Flask python-escpos pyserial paho-mqtt python-dotenv Werkzeug Pillow; do
             $PIP_CMD install --break-system-packages $package 2>/dev/null || $PIP_CMD install $package 2>/dev/null || true
         done
     }

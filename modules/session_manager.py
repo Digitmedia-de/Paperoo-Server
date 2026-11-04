@@ -1,19 +1,21 @@
-import hashlib
 import hmac
 import secrets
 from functools import wraps
 from datetime import datetime, timedelta
 from flask import session, redirect, url_for, request, jsonify, render_template
+from werkzeug.security import check_password_hash
 import logging
 
 logger = logging.getLogger(__name__)
 
 class SessionManager:
-    def __init__(self, config):
+    def __init__(self, config, database=None):
         """Initialize the session manager with configuration"""
         self.enabled = config.get('WEB_AUTH_ENABLED', 'false').lower() == 'true'
         self.username = config.get('WEB_USERNAME', '').strip()
         self.password = config.get('WEB_PASSWORD', '')
+        self.password_hash = config.get('WEB_PASSWORD_HASH', '').strip()
+        self.database = database
         self.session_timeout = int(config.get('WEB_SESSION_TIMEOUT', 1440))  # minutes
         self.remember_me_days = int(config.get('WEB_REMEMBER_ME_DAYS', 30))
         
@@ -25,6 +27,9 @@ class SessionManager:
         self.login_attempts = {}
         self.max_attempts = 5
         self.lockout_duration = 300  # 5 minutes in seconds
+
+        if self.enabled and self.password and not self.password_hash:
+            logger.warning("WEB_PASSWORD uses plaintext comparison; configure WEB_PASSWORD_HASH instead")
     
     def _parse_ip_whitelist(self, whitelist_str):
         """Parse IP whitelist from comma-separated string"""
@@ -79,7 +84,7 @@ class SessionManager:
     
     def is_enabled(self):
         """Check if web authentication is enabled"""
-        return self.enabled and self.password
+        return self.enabled and bool(self.password_hash or self.password)
     
     def verify_credentials(self, username, password):
         """Verify login credentials with constant-time comparison"""
@@ -91,47 +96,79 @@ class SessionManager:
         if self.username:
             username_valid = hmac.compare_digest(username.lower(), self.username.lower())
         
-        # Always check password
-        password_valid = hmac.compare_digest(password, self.password)
+        if self.password_hash:
+            password_valid = check_password_hash(self.password_hash, password)
+        else:
+            password_valid = hmac.compare_digest(password, self.password)
         
         return username_valid and password_valid
     
+    def _get_login_attempt(self, ip_address):
+        if self.database:
+            return self.database.get_login_attempt(ip_address)
+        return self.login_attempts.get(ip_address)
+
+    def _save_login_attempt(self, ip_address, count, timestamp):
+        if self.database:
+            self.database.save_login_attempt(ip_address, count, timestamp)
+        elif count > 0:
+            self.login_attempts[ip_address] = (count, timestamp)
+        else:
+            self.login_attempts.pop(ip_address, None)
+
     def check_rate_limit(self, ip_address):
         """Check if IP is rate limited for login attempts"""
         now = datetime.now()
-        
-        # Clean old attempts
-        self.login_attempts = {
-            ip: (count, timestamp) 
-            for ip, (count, timestamp) in self.login_attempts.items()
-            if (now - timestamp).total_seconds() < self.lockout_duration
-        }
-        
-        if ip_address in self.login_attempts:
-            count, timestamp = self.login_attempts[ip_address]
-            if count >= self.max_attempts:
-                remaining = self.lockout_duration - (now - timestamp).total_seconds()
-                if remaining > 0:
-                    return False, int(remaining)
-        
+        attempt = self._get_login_attempt(ip_address)
+
+        if attempt:
+            count, timestamp = attempt
+            elapsed = (now - timestamp).total_seconds()
+            if elapsed >= self.lockout_duration:
+                self._save_login_attempt(ip_address, 0, now)
+            elif count >= self.max_attempts:
+                return False, max(1, int(self.lockout_duration - elapsed))
+
         return True, 0
-    
+
     def record_login_attempt(self, ip_address, success):
         """Record a login attempt"""
         now = datetime.now()
-        
+
         if success:
-            # Clear attempts on successful login
-            if ip_address in self.login_attempts:
-                del self.login_attempts[ip_address]
+            self._save_login_attempt(ip_address, 0, now)
+            return
+
+        attempt = self._get_login_attempt(ip_address)
+        if attempt and (now - attempt[1]).total_seconds() < self.lockout_duration:
+            count = attempt[0] + 1
         else:
-            # Increment failed attempts
-            if ip_address in self.login_attempts:
-                count, _ = self.login_attempts[ip_address]
-                self.login_attempts[ip_address] = (count + 1, now)
-            else:
-                self.login_attempts[ip_address] = (1, now)
-    
+            count = 1
+        self._save_login_attempt(ip_address, count, now)
+
+    def get_csrf_token(self):
+        token = session.get('csrf_token')
+        if not token:
+            token = secrets.token_hex(32)
+            session['csrf_token'] = token
+        return token
+
+    def require_csrf(self, f):
+        """Decorator to require a valid CSRF token for form submissions"""
+        @wraps(f)
+        def decorated_function(*args, **kwargs):
+            expected_token = session.get('csrf_token', '')
+            provided_token = request.form.get('csrf_token', '') or request.headers.get('X-CSRF-Token', '')
+            if not expected_token or not provided_token or not hmac.compare_digest(provided_token, expected_token):
+                return jsonify({
+                    'success': False,
+                    'error': 'Invalid CSRF token',
+                    'message': 'The CSRF token is missing or invalid'
+                }), 403
+            return f(*args, **kwargs)
+
+        return decorated_function
+
     def create_session(self, remember_me=False):
         """Create a new session after successful login"""
         session.permanent = True
