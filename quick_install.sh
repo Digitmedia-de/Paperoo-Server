@@ -90,11 +90,11 @@ CURRENT_DIR=$(pwd)
 # Step 3: Setup Python virtual environment
 echo -e "${YELLOW}Step 3: Setting up Python virtual environment...${NC}"
 
-# Find working Python command
+# Find a working Python 3.11+ command
 PYTHON_CMD=""
-for cmd in python3 python3.11 python3.10 python3.9 python; do
+for cmd in python3 python3.15 python3.14 python3.13 python3.12 python3.11; do
     if command_exists $cmd; then
-        if $cmd --version &> /dev/null; then
+        if $cmd -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' &> /dev/null; then
             PYTHON_CMD=$cmd
             break
         fi
@@ -102,17 +102,17 @@ for cmd in python3 python3.11 python3.10 python3.9 python; do
 done
 
 if [ -z "$PYTHON_CMD" ]; then
-    echo -e "${RED}Error: No working Python installation found!${NC}"
+    echo -e "${RED}Error: Python 3.11 or newer is required!${NC}"
     echo "Attempting to fix Python installation..."
     
     # Try to reinstall Python
     sudo apt-get install --reinstall -y python3 python3-minimal
     
     # Check again
-    if command_exists python3 && python3 --version &> /dev/null; then
+    if command_exists python3 && python3 -c 'import sys; raise SystemExit(sys.version_info < (3, 11))' &> /dev/null; then
         PYTHON_CMD="python3"
     else
-        echo -e "${RED}Failed to install Python. Please install manually.${NC}"
+        echo -e "${RED}Failed to install Python 3.11+. Please install it manually.${NC}"
         exit 1
     fi
 fi
@@ -185,7 +185,7 @@ if [ "$USE_VENV" != "false" ]; then
     $PIP_CMD install wheel 2>/dev/null || true
     $PIP_CMD install -r requirements.txt || {
         echo -e "${YELLOW}Some packages failed, installing one by one...${NC}"
-        for package in Flask python-escpos pyserial paho-mqtt python-dotenv Werkzeug Pillow; do
+        for package in Flask python-escpos pyserial paho-mqtt python-dotenv Werkzeug Pillow requests; do
             $PIP_CMD install $package 2>/dev/null || true
         done
     }
@@ -195,7 +195,7 @@ else
     $PIP_CMD install --break-system-packages wheel 2>/dev/null || $PIP_CMD install wheel 2>/dev/null || true
     $PIP_CMD install --break-system-packages -r requirements.txt 2>/dev/null || $PIP_CMD install -r requirements.txt || {
         echo -e "${YELLOW}Installing packages individually...${NC}"
-        for package in Flask python-escpos pyserial paho-mqtt python-dotenv Werkzeug Pillow; do
+        for package in Flask python-escpos pyserial paho-mqtt python-dotenv Werkzeug Pillow requests; do
             $PIP_CMD install --break-system-packages $package 2>/dev/null || $PIP_CMD install $package 2>/dev/null || true
         done
     }
